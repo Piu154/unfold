@@ -15,6 +15,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AppAdminRouteImport } from './routes/_app.admin'
 import { Route as AppDiscoverRouteImport } from './routes/_app.discover'
 import { Route as AppFeedRouteImport } from './routes/_app.feed'
+import { Route as AppGuidePostRouteImport } from './routes/_app.guide-post'
 import { Route as AppGuidesRouteImport } from './routes/_app.guides'
 import { Route as AppHiddenRouteImport } from './routes/_app.hidden'
 import { Route as AppMeRouteImport } from './routes/_app.me'
@@ -53,6 +54,11 @@ const AppDiscoverRoute = AppDiscoverRouteImport.update({
 const AppFeedRoute = AppFeedRouteImport.update({
   id: '/feed',
   path: '/feed',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppGuidePostRoute = AppGuidePostRouteImport.update({
+  id: '/guide-post',
+  path: '/guide-post',
   getParentRoute: () => AppRoute,
 } as any)
 const AppGuidesRoute = AppGuidesRouteImport.update({
@@ -112,6 +118,7 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AppAdminRoute
   '/discover': typeof AppDiscoverRoute
   '/feed': typeof AppFeedRoute
+  '/guide-post': typeof AppGuidePostRoute
   '/guides': typeof AppGuidesRouteWithChildren
   '/hidden': typeof AppHiddenRoute
   '/me': typeof AppMeRoute
@@ -129,6 +136,7 @@ export interface FileRoutesByTo {
   '/admin': typeof AppAdminRoute
   '/discover': typeof AppDiscoverRoute
   '/feed': typeof AppFeedRoute
+  '/guide-post': typeof AppGuidePostRoute
   '/guides': typeof AppGuidesRouteWithChildren
   '/hidden': typeof AppHiddenRoute
   '/me': typeof AppMeRoute
@@ -148,6 +156,7 @@ export interface FileRoutesById {
   '/_app/admin': typeof AppAdminRoute
   '/_app/discover': typeof AppDiscoverRoute
   '/_app/feed': typeof AppFeedRoute
+  '/_app/guide-post': typeof AppGuidePostRoute
   '/_app/guides': typeof AppGuidesRouteWithChildren
   '/_app/hidden': typeof AppHiddenRoute
   '/_app/me': typeof AppMeRoute
@@ -167,6 +176,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/discover'
     | '/feed'
+    | '/guide-post'
     | '/guides'
     | '/hidden'
     | '/me'
@@ -184,6 +194,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/discover'
     | '/feed'
+    | '/guide-post'
     | '/guides'
     | '/hidden'
     | '/me'
@@ -202,6 +213,7 @@ export interface FileRouteTypes {
     | '/_app/admin'
     | '/_app/discover'
     | '/_app/feed'
+    | '/_app/guide-post'
     | '/_app/guides'
     | '/_app/hidden'
     | '/_app/me'
@@ -262,6 +274,13 @@ declare module '@tanstack/react-router' {
       path: '/feed'
       fullPath: '/feed'
       preLoaderRoute: typeof AppFeedRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/guide-post': {
+      id: '/_app/guide-post'
+      path: '/guide-post'
+      fullPath: '/guide-post'
+      preLoaderRoute: typeof AppGuidePostRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/guides': {
@@ -353,6 +372,7 @@ interface AppRouteChildren {
   AppAdminRoute: typeof AppAdminRoute
   AppDiscoverRoute: typeof AppDiscoverRoute
   AppFeedRoute: typeof AppFeedRoute
+  AppGuidePostRoute: typeof AppGuidePostRoute
   AppGuidesRoute: typeof AppGuidesRouteWithChildren
   AppHiddenRoute: typeof AppHiddenRoute
   AppMeRoute: typeof AppMeRoute
@@ -368,6 +388,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppAdminRoute: AppAdminRoute,
   AppDiscoverRoute: AppDiscoverRoute,
   AppFeedRoute: AppFeedRoute,
+  AppGuidePostRoute: AppGuidePostRoute,
   AppGuidesRoute: AppGuidesRouteWithChildren,
   AppHiddenRoute: AppHiddenRoute,
   AppMeRoute: AppMeRoute,
