@@ -1,0 +1,236 @@
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useState } from "react";
+import { Logo } from "@/components/Logo";
+
+export const Route = createFileRoute("/")({
+  head: () => ({
+    meta: [
+      { title: "Unfold — Discover opportunities before you knew they existed" },
+      { name: "description", content: "The world is full of fellowships, research labs, competitions and mentors school never introduces you to. Unfold is where they surface." },
+      { property: "og:title", content: "Unfold — a living discovery universe" },
+      { property: "og:description", content: "Discover the opportunities before you realize they existed." },
+    ],
+  }),
+  component: Landing,
+});
+
+const TRY_QUERIES = [
+  "I love biology and puzzles",
+  "make my hometown better",
+  "space + music",
+  "a career that doesn't have a name yet",
+];
+
+const FIELDS = [
+  "Biology", "AI / ML", "Design", "Public Policy", "Neuroscience",
+  "Robotics", "Climate", "Journalism", "Economics", "Music",
+  "Mathematics", "Architecture",
+];
+
+const NUMBERED = [
+  ["01", "Fellowships & residencies", "outside your country and inside underexplored towns."],
+  ["02", "Research labs", "hiring undergrads for real work — with stipends."],
+  ["03", "Competitions", "with real prize pools, jobs and grants attached."],
+  ["04", "Micro-grants", "for weird ideas, side projects and civic experiments."],
+  ["05", "One-of-one mentors", "who did the thing before you knew it existed."],
+  ["06", "Emerging fields", "and roles that don't have a formal degree yet."],
+];
+
+const WAYS = [
+  {
+    tag: "01 / SEARCH",
+    title: "Explore by curiosity",
+    items: ["Type a feeling, not a keyword", "Get living, ranked results", "Save what makes you lean forward"],
+  },
+  {
+    tag: "02 / GUIDES",
+    title: "Talk to a human",
+    items: ["Book a 30-minute session", "With people who did the path", "No LinkedIn cold DMs, no gate"],
+  },
+  {
+    tag: "03 / HIDDEN",
+    title: "Surface the hidden",
+    items: ["Under-applied opportunities", "Non-obvious degrees & orgs", "The internet's long tail"],
+  },
+];
+
+function Landing() {
+  const navigate = useNavigate();
+  const [query, setQuery] = useState("");
+
+  const go = (q?: string) => {
+    const target = (q ?? query).trim();
+    navigate({ to: "/search", search: { q: target || undefined } });
+  };
+
+  return (
+    <div className="min-h-screen bg-bg text-ink">
+      {/* Nav */}
+      <nav className="sticky top-0 z-30 flex items-center justify-between border-b border-line bg-bg/85 px-[5vw] py-4 backdrop-blur">
+        <Logo />
+        <div className="flex items-center gap-3">
+          <Link to="/auth" className="text-xs font-medium text-ink-dim hover:text-ink" >Sign in</Link>
+          <Link
+            to="/feed"
+            className="rounded-full bg-gold px-4 py-2 text-xs font-semibold text-white hover:opacity-90"
+            style={{
+              color:"#1c1919"
+            }}
+          >
+            Start exploring
+          </Link>
+        </div>
+      </nav>
+
+      {/* Hero */}
+      <section className="px-[5vw] pb-8 pt-16 text-center">
+        <span className="inline-flex items-center gap-2 rounded-full border border-line px-3 py-1.5 text-[10.5px] uppercase tracking-wider text-ink-dim">
+          <span className="h-1.5 w-1.5 rounded-full bg-sage" />
+          A living discovery universe
+        </span>
+        <h1 className="serif mx-auto mt-6 max-w-3xl text-4xl font-medium leading-[1.18] tracking-tight sm:text-5xl">
+          Discover the opportunities
+          <br />
+          <em className="font-normal not-italic text-ink-dim italic">before you realize they existed.</em>
+        </h1>
+        <p className="mx-auto mt-5 max-w-lg text-[15px] leading-relaxed text-ink-dim">
+          The world is full of careers, fellowships, research labs, competitions and people that school never
+          introduces you to. Unfold is where they surface.
+        </p>
+
+        <div className="mx-auto mt-7 flex max-w-md items-center gap-2 rounded-2xl border border-line bg-panel p-3">
+          <input
+            className="flex-1 bg-transparent px-2 text-[13.5px] text-ink outline-none placeholder:italic placeholder:text-ink-faint"
+            style={{ fontFamily: "var(--font-serif)" }}
+            placeholder="what makes you lose track of time?"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && go()}
+          />
+          <button
+            onClick={() => go()}
+            className="rounded-lg bg-gold px-3 py-2 text-xs font-semibold text-white"
+             style={{
+              color:"#1c1919"
+            }}
+          >
+            Discover →
+          </button>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+          <span className="text-[10.5px] text-ink-faint">try:</span>
+          {TRY_QUERIES.map((q) => (
+            <button
+              key={q}
+              onClick={() => { setQuery(q); go(q); }}
+              className="rounded-full border border-line px-3 py-1.5 text-[11.5px] text-ink-dim hover:border-gold hover:text-gold"
+            >
+              {q}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      {/* Fields */}
+      <section className="border-t border-line px-[5vw] py-14">
+        <div className="mx-auto max-w-5xl">
+          <p className="mono mb-3 flex items-center gap-2 text-[10.5px] text-ink-faint">
+            <span className="text-gold">01</span> BROWSE BY FIELD
+            <span className="ml-2 h-px flex-1 bg-line" />
+          </p>
+          <h2 className="serif max-w-xl text-[26px] font-medium leading-tight">
+            Or start from a curiosity <em className="italic text-ink-dim">you already know.</em>
+          </h2>
+          <div className="mt-8 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {FIELDS.map((f) => (
+              <button
+                key={f}
+                onClick={() => navigate({ to: "/search", search: { q: f } })}
+                className="flex items-center gap-2 rounded-xl border border-line px-3 py-3 text-left text-xs text-ink-dim transition hover:border-gold hover:text-gold"
+              >
+                {f}
+                <span className="ml-auto text-[11px] text-ink-faint">→</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Numbered list */}
+      <section className="border-t border-line px-[5vw] py-14">
+        <div className="mx-auto max-w-5xl">
+          <p className="mono mb-3 flex items-center gap-2 text-[10.5px] text-ink-faint">
+            <span className="text-gold">02</span> WHAT LIVES HERE
+            <span className="ml-2 h-px flex-1 bg-line" />
+          </p>
+          <h2 className="serif max-w-xl text-[26px] font-medium leading-tight">
+            Six kinds of doors <em className="italic text-ink-dim">school forgets to mention.</em>
+          </h2>
+          <ul className="mt-8 grid gap-x-10 sm:grid-cols-2">
+            {NUMBERED.map(([n, title, sub]) => (
+              <li key={n} className="flex gap-3 border-b border-line py-3.5 text-sm text-ink-dim">
+                <span className="mono pt-1 text-[10.5px] text-gold">{n}</span>
+                <span><b className="font-medium text-ink">{title}</b> — {sub}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+
+      {/* Ways */}
+      <section className="border-t border-line px-[5vw] py-14">
+        <div className="mx-auto max-w-5xl">
+          <p className="mono mb-3 flex items-center gap-2 text-[10.5px] text-ink-faint">
+            <span className="text-gold">03</span> THREE WAYS IN
+            <span className="ml-2 h-px flex-1 bg-line" />
+          </p>
+          <h2 className="serif max-w-xl text-[26px] font-medium leading-tight">
+            However you want to <em className="italic text-ink-dim">start unfolding.</em>
+          </h2>
+          <div className="mt-8 grid gap-3.5 md:grid-cols-3">
+            {WAYS.map((w) => (
+              <div key={w.tag} className="rounded-2xl border border-line p-5">
+                <p className="mono mb-2 text-[10px] uppercase text-ink-faint">{w.tag}</p>
+                <h3 className="serif mb-3 text-[17px] font-medium">{w.title}</h3>
+                <ul className="flex flex-col gap-1.5">
+                  {w.items.map((i) => (
+                    <li key={i} className="flex gap-2 text-[12.5px] text-ink-dim">
+                      <span className="text-gold">·</span>{i}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Manifesto */}
+      <section className="border-t border-line px-6 py-16 text-center">
+        <h2 className="serif mx-auto max-w-xl text-[25px] font-medium leading-snug">
+          The internet is a library, <em className="italic text-ink-dim">but nobody handed you the map.</em>
+        </h2>
+        <p className="mx-auto mt-4 max-w-xs text-[13px] leading-relaxed text-ink-dim">
+          Unfold is that map — living, ranked, and quiet about what doesn't matter.
+        </p>
+        <p className="mt-6 text-sm">
+          Ready? <b className="font-medium text-gold">Pick your first door.</b>
+        </p>
+        <Link
+          to="/feed"
+          className="mt-5 inline-block rounded-full bg-gold px-7 py-3.5 text-sm font-semibold text-white hover:opacity-90"
+          style={{
+              color:"#1c1919"
+            }}
+        >
+          Start exploring
+        </Link>
+      </section>
+
+      <footer className="border-t border-line px-[5vw] py-8 text-center text-[11px] text-ink-faint">
+        © {new Date().getFullYear()} Unfold. Built for the curious.
+      </footer>
+    </div>
+  );
+}
