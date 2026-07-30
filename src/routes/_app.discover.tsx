@@ -1,150 +1,469 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
-import { Sparkles, Flame, Clock, SlidersHorizontal, Search } from "lucide-react";
-import { OpportunityCard } from "@/components/OpportunityCard";
-import { DOMAINS, OPPORTUNITY_TYPES, useRankedOpportunities, type Filters } from "@/lib/opportunities";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { Search, CheckCircle2 } from "lucide-react";
+import { useState } from "react";
 
 export const Route = createFileRoute("/_app/discover")({
   head: () => ({
     meta: [
-      { title: "Discover opportunities — Unfold" },
-      { name: "description", content: "Personalized, deadline-aware opportunities from every field, ranked for you." },
-      { property: "og:title", content: "Discover opportunities — Unfold" },
-      { property: "og:description", content: "Hidden gems, trending calls and closing-soon deadlines, personalized." },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary_large_image" },
+      { title: "Discover — Unfold" },
+      {
+        name: "description",
+        content: "Discover people, posts, sessions and opportunities.",
+      },
     ],
   }),
   component: DiscoverPage,
 });
 
-const TABS = [
-  { id: "hidden", label: "Hidden Gems", icon: Sparkles },
-  { id: "trending", label: "Trending", icon: Flame },
-  { id: "deadline", label: "Deadline soon", icon: Clock },
-] as const;
-
 function DiscoverPage() {
-  const [tab, setTab] = useState<(typeof TABS)[number]["id"]>("hidden");
-  const [filters, setFilters] = useState<Filters>({});
-  const [q, setQ] = useState("");
+  const [search, setSearch] = useState("");
+  const [query, setQuery] = useState("");
 
-  const { ranked, isLoading, profile } = useRankedOpportunities({ ...filters, q: q || undefined });
+  const { data, isLoading } = useQuery({
+    queryKey: ["discover", query],
 
-  const list = useMemo(() => {
-    const now = Date.now();
-    if (tab === "hidden") return ranked.filter((r) => r.item.hidden_gem || r.reasons.length > 0).slice(0, 60);
-    if (tab === "trending")
-      return [...ranked].sort((a, b) => (b.item.trending_score ?? 0) - (a.item.trending_score ?? 0)).slice(0, 60);
-    return ranked
-      .filter((r) => r.item.deadline && new Date(r.item.deadline).getTime() > now)
-      .sort((a, b) => new Date(a.item.deadline!).getTime() - new Date(b.item.deadline!).getTime())
-      .slice(0, 60);
-  }, [ranked, tab]);
+    enabled: query.trim().length > 0,
 
-  const set = (patch: Partial<Filters>) => setFilters((f) => ({ ...f, ...patch }));
+    queryFn: async () => {
+      const term = query.trim();
+
+      /*
+       * ---------------------------------------------
+       * PEOPLE / GUIDES
+       * ---------------------------------------------
+       */
+
+      const { data: guides, error: guidesError } = await supabase
+        .from("guides")
+        .select("*")
+        .or(
+          `field.ilike.%${term}%,headline.ilike.%${term}%,bio.ilike.%${term}%`
+        )
+        .limit(20);
+
+      if (guidesError) throw guidesError;
+
+      const guideUserIds = (guides ?? []).map((g) => g.user_id);
+
+      let profiles: any[] = [];
+
+      if (guideUserIds.length > 0) {
+        const { data: profileData, error: profileError } = await supabase
+          .from("profiles")
+          .select("id, display_name, username, avatar_url, bio")
+          .in("id", guideUserIds);
+
+        if (profileError) throw profileError;
+
+        profiles = profileData ?? [];
+      }
+
+      const profileMap = new Map(
+        profiles.map((profile) => [profile.id, profile])
+      );
+
+      const people = (guides ?? []).map((guide) => ({
+        ...guide,
+        profile: profileMap.get(guide.user_id) ?? null,
+      }));
+
+      /*
+       * ---------------------------------------------
+       * POSTS
+       * ---------------------------------------------
+       */
+
+      const { data: posts, error: postsError } = await supabase
+        .from("feed_posts")
+        .select("*")
+        .or(
+          `title.ilike.%${term}%,body.ilike.%${term}%`
+        )
+        .order("created_at", { ascending: false })
+        .limit(20);
+
+      if (postsError) throw postsError;
+
+      /*
+       * ---------------------------------------------
+       * OPPORTUNITIES
+       * ---------------------------------------------
+       */
+
+      const { data: opportunities, error: opportunitiesError } =
+        await supabase
+          .from("opportunities")
+          .select("*")
+          .or(
+            `title.ilike.%${term}%,description.ilike.%${term}%,category.ilike.%${term}%`
+          )
+          .order("created_at", { ascending: false })
+          .limit(20);
+
+      if (opportunitiesError) throw opportunitiesError;
+
+      /*
+       * ---------------------------------------------
+       * SESSIONS
+       * ---------------------------------------------
+       */
+
+      const { data: sessions, error: sessionsError } = await supabase
+        .from("guide_session_types")
+        .select("*")
+        .or(
+          `name.ilike.%${term}%,description.ilike.%${term}%`
+        )
+        .order("created_at", { ascending: false })
+        .limit(20);
+
+      if (sessionsError) throw sessionsError;
+
+      return {
+        people,
+        posts: posts ?? [],
+        opportunities: opportunities ?? [],
+        sessions: sessions ?? [],
+      };
+    },
+  });
+
+  function handleSearch(e: React.FormEvent) {
+    e.preventDefault();
+
+    const value = search.trim();
+
+    if (!value) return;
+
+    setQuery(value);
+  }
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8">
-      <header className="mb-7 animate-rise">
-        <h1 className="serif text-4xl font-medium tracking-tight text-gradient">Discover</h1>
-        <p className="mt-1.5 text-sm text-ink-dim">
-          Rare, official opportunities from every field — ranked by what you actually care about.
+    <div className="mx-auto max-w-4xl px-4 py-6">
+
+      {/* HEADER */}
+
+      <div className="mb-6">
+        <h1 className="serif text-2xl font-medium">
+          Discover
+        </h1>
+
+        <p className="mt-1 text-sm text-ink-dim">
+          Find people, knowledge and opportunities around what interests you.
         </p>
-      </header>
+      </div>
 
-      {/* Search + filters */}
-      <div className="mb-5 grid gap-2.5 md:grid-cols-[1fr_auto_auto_auto_auto]">
-        <div className="relative">
-          <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-faint" />
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Search opportunities, organizations…"
-            className="w-full rounded-xl glass py-2.5 pl-10 pr-3 text-sm text-ink outline-none placeholder:text-ink-faint focus:border-gold/50"
+      {/* SEARCH */}
+
+      <form
+        onSubmit={handleSearch}
+        className="mb-8 flex gap-2"
+      >
+        <div className="relative flex-1">
+
+          <Search
+            size={17}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint"
           />
+
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search anything — economics, sports, design..."
+            className="w-full rounded-xl border border-line bg-panel py-3 pl-10 pr-4 text-sm outline-none transition focus:border-gold"
+          />
+
         </div>
-        <select
-          value={filters.type ?? ""}
-          onChange={(e) => set({ type: e.target.value || undefined })}
-          className="rounded-xl glass px-3 py-2.5 text-sm text-ink-dim outline-none focus:border-gold/50"
-        >
-          <option value="">All types</option>
-          {OPPORTUNITY_TYPES.map((t) => (
-            <option key={t} value={t} className="bg-bg">
-              {t}
-            </option>
-          ))}
-        </select>
-        <select
-          value={filters.domain ?? ""}
-          onChange={(e) => set({ domain: e.target.value || undefined })}
-          className="rounded-xl glass px-3 py-2.5 text-sm text-ink-dim outline-none focus:border-gold/50"
-        >
-          <option value="">All domains</option>
-          {DOMAINS.map((d) => (
-            <option key={d} value={d} className="bg-bg">
-              {d}
-            </option>
-          ))}
-        </select>
-        <input
-          value={filters.country ?? ""}
-          onChange={(e) => set({ country: e.target.value || undefined })}
-          placeholder="Country"
-          className="rounded-xl glass px-3 py-2.5 text-sm text-ink outline-none placeholder:text-ink-faint focus:border-gold/50"
-        />
+
         <button
-          onClick={() => set({ remote: filters.remote ? undefined : true })}
-          className={`flex items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-sm transition ${
-            filters.remote ? "border border-gold/50 bg-gold-dim text-gold" : "glass text-ink-dim hover:text-ink"
-          }`}
+          type="submit"
+          className="rounded-xl bg-gold px-5 py-3 text-sm font-semibold text-white"
         >
-          <SlidersHorizontal size={14} /> Remote
+          Search
         </button>
-      </div>
+      </form>
 
-      {/* Tabs */}
-      <div className="mb-6 inline-flex gap-1 rounded-2xl glass p-1">
-        {TABS.map((t) => {
-          const Icon = t.icon;
-          const active = tab === t.id;
-          return (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={`flex items-center gap-1.5 rounded-xl px-4 py-2 text-[12.5px] transition ${
-                active
-                  ? "bg-gradient-to-r from-violet/30 to-gold/25 font-semibold text-ink glow-ring"
-                  : "text-ink-dim hover:text-ink"
-              }`}
-            >
-              <Icon size={14} /> {t.label}
-            </button>
-          );
-        })}
-      </div>
+      {/* EMPTY STATE */}
 
-      {profile.isEmpty && (
-        <div className="mb-5 rounded-2xl glass p-4 text-sm text-ink-dim">
-          Save a few opportunities and follow organizations — the feed sharpens itself with every action you take.
+      {!query && (
+        <div className="rounded-2xl border border-line bg-panel p-10 text-center">
+          <p className="serif text-lg">
+            What are you interested in?
+          </p>
+
+          <p className="mt-2 text-sm text-ink-dim">
+            Search for a field, topic, profession, activity or anything you
+            want to explore.
+          </p>
         </div>
       )}
 
-      {isLoading && <p className="text-sm text-ink-dim">Aligning the constellation…</p>}
+      {/* LOADING */}
 
-      {!isLoading && list.length === 0 && (
-        <div className="rounded-2xl glass p-12 text-center">
-          <p className="serif text-xl">Nothing matches yet.</p>
-          <p className="mt-2 text-sm text-ink-dim">Loosen the filters, or check the Sources page for what we track.</p>
+      {query && isLoading && (
+        <p className="text-sm text-ink-dim">
+          Discovering...
+        </p>
+      )}
+
+      {/* RESULTS */}
+
+      {query && !isLoading && data && (
+        <div className="space-y-8">
+
+          {/* PEOPLE */}
+
+          <section>
+            <SectionTitle
+              title="People"
+              count={data.people.length}
+            />
+
+            {data.people.length === 0 ? (
+              <EmptyText text="No people found." />
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2">
+
+                {data.people.map((guide) => (
+                  <Link
+                    key={guide.id}
+                    to="/profile/$id"
+                    params={{ id: guide.user_id }}
+                    className="rounded-2xl border border-line bg-panel p-4 transition hover:border-gold/40"
+                  >
+
+                    <div className="flex items-center gap-3">
+
+                      {guide.profile?.avatar_url ? (
+                        <img
+                          src={guide.profile.avatar_url}
+                          alt=""
+                          className="h-12 w-12 rounded-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gold text-white font-semibold">
+                          {(guide.profile?.display_name ?? "U")[0]}
+                        </div>
+                      )}
+
+                      <div className="min-w-0">
+
+                        <p className="flex items-center gap-1 text-sm font-semibold">
+                          {guide.profile?.display_name ?? "Guide"}
+
+                          {guide.verified && (
+                            <CheckCircle2
+                              size={13}
+                              className="text-gold"
+                            />
+                          )}
+                        </p>
+
+                        <p className="text-xs text-ink-faint">
+                          {guide.field}
+                        </p>
+
+                      </div>
+
+                    </div>
+
+                    {guide.headline && (
+                      <p className="mt-3 text-xs text-ink-dim">
+                        {guide.headline}
+                      </p>
+                    )}
+
+                  </Link>
+                ))}
+
+              </div>
+            )}
+          </section>
+
+          {/* POSTS */}
+
+          <section>
+            <SectionTitle
+              title="Posts"
+              count={data.posts.length}
+            />
+
+            {data.posts.length === 0 ? (
+              <EmptyText text="No related posts found." />
+            ) : (
+              <div className="space-y-3">
+
+                {data.posts.map((post) => (
+                  <Link
+                    key={post.id}
+                    to="/feed"
+                    className="block rounded-2xl border border-line bg-panel p-4 transition hover:border-gold/40"
+                  >
+
+                    {post.title && (
+                      <h3 className="text-sm font-semibold">
+                        {post.title}
+                      </h3>
+                    )}
+
+                    {post.body && (
+                      <p className="mt-1 line-clamp-3 text-xs leading-relaxed text-ink-dim">
+                        {post.body}
+                      </p>
+                    )}
+
+                  </Link>
+                ))}
+
+              </div>
+            )}
+          </section>
+
+          {/* SESSIONS */}
+
+          <section>
+            <SectionTitle
+              title="Sessions"
+              count={data.sessions.length}
+            />
+
+            {data.sessions.length === 0 ? (
+              <EmptyText text="No related sessions found." />
+            ) : (
+              <div className="space-y-3">
+
+                {data.sessions.map((session) => (
+                  <div
+                    key={session.id}
+                    className="rounded-2xl border border-line bg-panel p-4"
+                  >
+
+                    <div className="flex items-start justify-between gap-3">
+
+                      <div>
+                        <h3 className="text-sm font-semibold">
+                          {session.name}
+                        </h3>
+
+                        <p className="mt-1 text-xs text-ink-faint">
+                          {session.duration_minutes} minutes
+                        </p>
+                      </div>
+
+                      <span className="rounded-md bg-panel-2 px-2 py-1 text-xs font-semibold">
+                        {session.price_cents === 0
+                          ? "Free"
+                          : `$${(session.price_cents / 100).toFixed(0)}`}
+                      </span>
+
+                    </div>
+
+                    {session.description && (
+                      <p className="mt-2 text-xs text-ink-dim">
+                        {session.description}
+                      </p>
+                    )}
+
+                  </div>
+                ))}
+
+              </div>
+            )}
+          </section>
+
+          {/* OPPORTUNITIES */}
+
+          <section>
+            <SectionTitle
+              title="Opportunities"
+              count={data.opportunities.length}
+            />
+
+            {data.opportunities.length === 0 ? (
+              <EmptyText text="No related opportunities found." />
+            ) : (
+              <div className="space-y-3">
+
+                {data.opportunities.map((opportunity) => (
+                  <Link
+                    key={opportunity.id}
+                    to="/opportunities/$id"
+                    params={{ id: opportunity.id }}
+                    className="block rounded-2xl border border-line bg-panel p-4 transition hover:border-gold/40"
+                  >
+
+                    <div className="flex items-start justify-between gap-3">
+
+                      <div>
+
+                        <h3 className="text-sm font-semibold">
+                          {opportunity.title}
+                        </h3>
+
+                        {opportunity.organization && (
+                          <p className="mt-1 text-xs text-ink-faint">
+                            {opportunity.organization}
+                          </p>
+                        )}
+
+                      </div>
+
+                      {opportunity.category && (
+                        <span className="rounded-md bg-gold-dim px-2 py-1 text-[10px] font-semibold text-gold">
+                          {opportunity.category}
+                        </span>
+                      )}
+
+                    </div>
+
+                    {opportunity.description && (
+                      <p className="mt-2 line-clamp-3 text-xs text-ink-dim">
+                        {opportunity.description}
+                      </p>
+                    )}
+
+                  </Link>
+                ))}
+
+              </div>
+            )}
+          </section>
+
         </div>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2">
-        {list.map((r, i) => (
-          <OpportunityCard key={r.item.id} o={r.item} reasons={r.reasons} index={i} />
-        ))}
-      </div>
+    </div>
+  );
+}
+
+function SectionTitle({
+  title,
+  count,
+}: {
+  title: string;
+  count: number;
+}) {
+  return (
+    <div className="mb-3 flex items-center justify-between">
+      <h2 className="serif text-lg font-medium">
+        {title}
+      </h2>
+
+      <span className="text-xs text-ink-faint">
+        {count}
+      </span>
+    </div>
+  );
+}
+
+function EmptyText({ text }: { text: string }) {
+  return (
+    <div className="rounded-xl border border-line bg-panel p-5">
+      <p className="text-xs text-ink-faint">
+        {text}
+      </p>
     </div>
   );
 }

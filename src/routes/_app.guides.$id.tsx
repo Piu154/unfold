@@ -559,7 +559,14 @@ function GuideDetail() {
             Learn directly from their experience.
           </p>
         </div>
-
+{isOwnGuide && (
+  <Link
+    to="/guide-post"
+    className="mb-6 block w-full rounded-lg bg-gold py-3 text-center text-sm font-semibold text-white"
+  >
+    Create post
+  </Link>
+)}
         <div className="mb-4 space-y-2">
 
           {sessionTypes?.length ? (

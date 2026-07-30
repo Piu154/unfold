@@ -26,6 +26,8 @@ import { Route as AppSettingsRouteImport } from './routes/_app.settings'
 import { Route as AppSourcesRouteImport } from './routes/_app.sources'
 import { Route as AppGuidesIdRouteImport } from './routes/_app.guides.$id'
 import { Route as AppOpportunitiesIdRouteImport } from './routes/_app.opportunities.$id'
+import { Route as AppProfileIdRouteImport } from './routes/_app.profile.$id'
+import { Route as AppProfileUserIdRouteImport } from './routes/_app.profile.$userId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -111,6 +113,16 @@ const AppOpportunitiesIdRoute = AppOpportunitiesIdRouteImport.update({
   path: '/opportunities/$id',
   getParentRoute: () => AppRoute,
 } as any)
+const AppProfileIdRoute = AppProfileIdRouteImport.update({
+  id: '/profile/$id',
+  path: '/profile/$id',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppProfileUserIdRoute = AppProfileUserIdRouteImport.update({
+  id: '/profile/$userId',
+  path: '/profile/$userId',
+  getParentRoute: () => AppRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -129,6 +141,8 @@ export interface FileRoutesByFullPath {
   '/sources': typeof AppSourcesRoute
   '/guides/$id': typeof AppGuidesIdRoute
   '/opportunities/$id': typeof AppOpportunitiesIdRoute
+  '/profile/$id': typeof AppProfileIdRoute
+  '/profile/$userId': typeof AppProfileUserIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -147,6 +161,8 @@ export interface FileRoutesByTo {
   '/sources': typeof AppSourcesRoute
   '/guides/$id': typeof AppGuidesIdRoute
   '/opportunities/$id': typeof AppOpportunitiesIdRoute
+  '/profile/$id': typeof AppProfileIdRoute
+  '/profile/$userId': typeof AppProfileUserIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -167,6 +183,8 @@ export interface FileRoutesById {
   '/_app/sources': typeof AppSourcesRoute
   '/_app/guides/$id': typeof AppGuidesIdRoute
   '/_app/opportunities/$id': typeof AppOpportunitiesIdRoute
+  '/_app/profile/$id': typeof AppProfileIdRoute
+  '/_app/profile/$userId': typeof AppProfileUserIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -187,6 +205,8 @@ export interface FileRouteTypes {
     | '/sources'
     | '/guides/$id'
     | '/opportunities/$id'
+    | '/profile/$id'
+    | '/profile/$userId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -205,6 +225,8 @@ export interface FileRouteTypes {
     | '/sources'
     | '/guides/$id'
     | '/opportunities/$id'
+    | '/profile/$id'
+    | '/profile/$userId'
   id:
     | '__root__'
     | '/'
@@ -224,6 +246,8 @@ export interface FileRouteTypes {
     | '/_app/sources'
     | '/_app/guides/$id'
     | '/_app/opportunities/$id'
+    | '/_app/profile/$id'
+    | '/_app/profile/$userId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -353,6 +377,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppOpportunitiesIdRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/profile/$id': {
+      id: '/_app/profile/$id'
+      path: '/profile/$id'
+      fullPath: '/profile/$id'
+      preLoaderRoute: typeof AppProfileIdRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/profile/$userId': {
+      id: '/_app/profile/$userId'
+      path: '/profile/$userId'
+      fullPath: '/profile/$userId'
+      preLoaderRoute: typeof AppProfileUserIdRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
@@ -382,6 +420,8 @@ interface AppRouteChildren {
   AppSettingsRoute: typeof AppSettingsRoute
   AppSourcesRoute: typeof AppSourcesRoute
   AppOpportunitiesIdRoute: typeof AppOpportunitiesIdRoute
+  AppProfileIdRoute: typeof AppProfileIdRoute
+  AppProfileUserIdRoute: typeof AppProfileUserIdRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
@@ -398,6 +438,8 @@ const AppRouteChildren: AppRouteChildren = {
   AppSettingsRoute: AppSettingsRoute,
   AppSourcesRoute: AppSourcesRoute,
   AppOpportunitiesIdRoute: AppOpportunitiesIdRoute,
+  AppProfileIdRoute: AppProfileIdRoute,
+  AppProfileUserIdRoute: AppProfileUserIdRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)

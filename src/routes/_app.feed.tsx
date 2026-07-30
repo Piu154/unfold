@@ -163,28 +163,43 @@ function PostCard({ post, currentUserId }: { post: any; currentUserId?: string }
 
   return (
     <article className="rounded-2xl border border-line bg-panel shadow-sm">
-      <header className="flex items-start gap-3 p-4">
-        <span className="ring-avatar shrink-0">
-          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-[12px] font-semibold text-gold">
-            {initials(author?.display_name)}
-          </span>
-        </span>
-        <div className="flex-1 min-w-0">
-          <p className="flex items-center gap-1 text-sm font-semibold text-ink">
-            {author?.display_name ?? "Unknown"}
-            {guide?.verified && <CheckCircle2 size={13} className="text-gold" />}
-          </p>
-          {guide?.field && (
-            <p className="truncate text-[11.5px] text-ink-faint">{guide.field}</p>
-          )}
-        </div>
-        {guide?.field && (
-          <span className="mono shrink-0 rounded-md border border-gold/30 bg-gold-dim px-2 py-0.5 text-[9.5px] font-semibold uppercase tracking-wider text-gold">
-            {guide.field.split(/[,/]/)[0].slice(0, 12)}
-          </span>
-        )}
-      </header>
+<header className="flex items-start gap-3 p-4">
+  <Link
+    to="/profile/$userId"
+    params={{ userId: post.author_id }}
+    className="ring-avatar shrink-0"
+  >
+    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-[12px] font-semibold text-gold">
+      {initials(author?.display_name)}
+    </span>
+  </Link>
 
+  <div className="flex-1 min-w-0">
+    <Link
+      to="/profile/$userId"
+      params={{ userId: post.author_id }}
+      className="flex items-center gap-1 text-sm font-semibold text-ink hover:underline"
+    >
+      {author?.display_name ?? "Unknown"}
+
+      {guide?.verified && (
+        <CheckCircle2 size={13} className="text-gold" />
+      )}
+    </Link>
+
+    {guide?.field && (
+      <p className="truncate text-[11.5px] text-ink-faint">
+        {guide.field}
+      </p>
+    )}
+  </div>
+
+  {guide?.field && (
+    <span className="mono shrink-0 rounded-md border border-gold/30 bg-gold-dim px-2 py-0.5 text-[9.5px] font-semibold uppercase tracking-wider text-gold">
+      {guide.field.split(/[,/]/)[0].slice(0, 12)}
+    </span>
+  )}
+</header>
       {post.body && (
         <p className="whitespace-pre-wrap px-4 pb-3 text-[14px] leading-relaxed text-ink">{post.body}</p>
       )}
