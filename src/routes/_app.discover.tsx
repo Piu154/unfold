@@ -1,150 +1,483 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
-import { Sparkles, Flame, Clock, SlidersHorizontal, Search } from "lucide-react";
-import { OpportunityCard } from "@/components/OpportunityCard";
-import { DOMAINS, OPPORTUNITY_TYPES, useRankedOpportunities, type Filters } from "@/lib/opportunities";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import {
+  ArrowRight,
+  Bookmark,
+  Compass,
+  Users,
+  Rss,
+  Search,
+  Sparkles,
+} from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useSession } from "@/lib/auth";
 
 export const Route = createFileRoute("/_app/discover")({
   head: () => ({
     meta: [
-      { title: "Discover opportunities — Unfold" },
-      { name: "description", content: "Personalized, deadline-aware opportunities from every field, ranked for you." },
-      { property: "og:title", content: "Discover opportunities — Unfold" },
-      { property: "og:description", content: "Hidden gems, trending calls and closing-soon deadlines, personalized." },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary_large_image" },
+      { title: "Discover — Unfold" },
+      {
+        name: "description",
+        content:
+          "Discover people, ideas, conversations and opportunities around what interests you.",
+      },
     ],
   }),
   component: DiscoverPage,
 });
 
-const TABS = [
-  { id: "hidden", label: "Hidden Gems", icon: Sparkles },
-  { id: "trending", label: "Trending", icon: Flame },
-  { id: "deadline", label: "Deadline soon", icon: Clock },
-] as const;
-
 function DiscoverPage() {
-  const [tab, setTab] = useState<(typeof TABS)[number]["id"]>("hidden");
-  const [filters, setFilters] = useState<Filters>({});
-  const [q, setQ] = useState("");
+  const { user } = useSession();
 
-  const { ranked, isLoading, profile } = useRankedOpportunities({ ...filters, q: q || undefined });
+  /* ---------------------------------------------
+   * PROFILE
+   * --------------------------------------------- */
 
-  const list = useMemo(() => {
-    const now = Date.now();
-    if (tab === "hidden") return ranked.filter((r) => r.item.hidden_gem || r.reasons.length > 0).slice(0, 60);
-    if (tab === "trending")
-      return [...ranked].sort((a, b) => (b.item.trending_score ?? 0) - (a.item.trending_score ?? 0)).slice(0, 60);
-    return ranked
-      .filter((r) => r.item.deadline && new Date(r.item.deadline).getTime() > now)
-      .sort((a, b) => new Date(a.item.deadline!).getTime() - new Date(b.item.deadline!).getTime())
-      .slice(0, 60);
-  }, [ranked, tab]);
+  const { data: profile, isLoading: profileLoading } = useQuery({
+    queryKey: ["discover-profile", user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("display_name, username, interests")
+        .eq("id", user!.id)
+        .maybeSingle();
 
-  const set = (patch: Partial<Filters>) => setFilters((f) => ({ ...f, ...patch }));
+      if (error) throw error;
+
+      return data;
+    },
+  });
+
+  /* ---------------------------------------------
+   * RECENT OPPORTUNITIES
+   *
+   * Discover only shows a small overview.
+   * Full searching stays on /search.
+   * --------------------------------------------- */
+
+  const { data: opportunities = [], isLoading: opportunitiesLoading } =
+    useQuery({
+      queryKey: ["discover-opportunities"],
+      queryFn: async () => {
+        const { data, error } = await supabase
+          .from("opportunities")
+          .select(
+            "id, title, description, category, organization, location, deadline, featured"
+          )
+          .order("created_at", { ascending: false })
+          .limit(4);
+
+        if (error) throw error;
+
+        return data ?? [];
+      },
+    });
+
+  /* ---------------------------------------------
+   * RECENT POSTS
+   * --------------------------------------------- */
+
+  const { data: posts = [], isLoading: postsLoading } = useQuery({
+    queryKey: ["discover-posts"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("feed_posts")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(3);
+
+      if (error) throw error;
+
+      return data ?? [];
+    },
+  });
+
+  const displayName =
+    profile?.display_name ||
+    profile?.username ||
+    "there";
+
+  const interests = profile?.interests ?? [];
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8">
-      <header className="mb-7 animate-rise">
-        <h1 className="serif text-4xl font-medium tracking-tight text-gradient">Discover</h1>
-        <p className="mt-1.5 text-sm text-ink-dim">
-          Rare, official opportunities from every field — ranked by what you actually care about.
+    <div className="mx-auto max-w-6xl px-4 py-7">
+
+      {/* ============================================
+          HERO
+      ============================================ */}
+
+      <section className="mb-8">
+
+        <p className="mb-2 text-xs font-medium uppercase tracking-wider text-gold">
+          Discover
         </p>
-      </header>
 
-      {/* Search + filters */}
-      <div className="mb-5 grid gap-2.5 md:grid-cols-[1fr_auto_auto_auto_auto]">
-        <div className="relative">
-          <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-faint" />
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Search opportunities, organizations…"
-            className="w-full rounded-xl glass py-2.5 pl-10 pr-3 text-sm text-ink outline-none placeholder:text-ink-faint focus:border-gold/50"
+        <h1 className="serif text-3xl font-medium tracking-tight sm:text-4xl">
+          Hello, {displayName}.
+        </h1>
+
+        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-ink-dim">
+          Explore people, ideas, conversations and opportunities that might
+          take you somewhere unexpected.
+        </p>
+
+      </section>
+
+      {/* ============================================
+          QUICK SEARCH
+          Small entry point — actual search stays /search
+      ============================================ */}
+
+      <Link
+        to="/search"
+        className="mb-8 flex max-w-3xl items-center gap-3 rounded-2xl border border-line bg-panel px-4 py-3.5 transition hover:border-gold/40"
+      >
+        <Search size={17} className="text-ink-faint" />
+
+        <span className="flex-1 text-sm text-ink-faint">
+          Search people, fields, opportunities...
+        </span>
+
+        <span className="hidden text-xs text-gold sm:block">
+          Explore
+        </span>
+
+        <ArrowRight size={15} className="text-ink-faint" />
+      </Link>
+
+      {/* ============================================
+          YOUR INTERESTS
+      ============================================ */}
+
+      {!profileLoading && interests.length > 0 && (
+        <section className="mb-9">
+
+          <SectionHeader
+            title="Your interests"
+            subtitle="Things you've told Unfold you're curious about."
           />
-        </div>
-        <select
-          value={filters.type ?? ""}
-          onChange={(e) => set({ type: e.target.value || undefined })}
-          className="rounded-xl glass px-3 py-2.5 text-sm text-ink-dim outline-none focus:border-gold/50"
-        >
-          <option value="">All types</option>
-          {OPPORTUNITY_TYPES.map((t) => (
-            <option key={t} value={t} className="bg-bg">
-              {t}
-            </option>
-          ))}
-        </select>
-        <select
-          value={filters.domain ?? ""}
-          onChange={(e) => set({ domain: e.target.value || undefined })}
-          className="rounded-xl glass px-3 py-2.5 text-sm text-ink-dim outline-none focus:border-gold/50"
-        >
-          <option value="">All domains</option>
-          {DOMAINS.map((d) => (
-            <option key={d} value={d} className="bg-bg">
-              {d}
-            </option>
-          ))}
-        </select>
-        <input
-          value={filters.country ?? ""}
-          onChange={(e) => set({ country: e.target.value || undefined })}
-          placeholder="Country"
-          className="rounded-xl glass px-3 py-2.5 text-sm text-ink outline-none placeholder:text-ink-faint focus:border-gold/50"
+
+          <div className="flex flex-wrap gap-2">
+            {interests.slice(0, 10).map((interest: string) => (
+              <span
+                key={interest}
+                className="rounded-full border border-line bg-panel px-3 py-1.5 text-xs text-ink-dim"
+              >
+                {interest}
+              </span>
+            ))}
+          </div>
+
+        </section>
+      )}
+
+      {/* ============================================
+          EXPLORE UNFOLD
+      ============================================ */}
+
+      <section className="mb-10">
+
+        <SectionHeader
+          title="Explore Unfold"
+          subtitle="Start wherever your curiosity takes you."
         />
-        <button
-          onClick={() => set({ remote: filters.remote ? undefined : true })}
-          className={`flex items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-sm transition ${
-            filters.remote ? "border border-gold/50 bg-gold-dim text-gold" : "glass text-ink-dim hover:text-ink"
-          }`}
+
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+
+          <ExploreCard
+            icon={Users}
+            title="People & Guides"
+            description="Discover people sharing knowledge and experience."
+            href="/guides"
+          />
+
+          <ExploreCard
+            icon={Rss}
+            title="Feed"
+            description="See what people are sharing and discussing."
+            href="/feed"
+          />
+
+          <ExploreCard
+            icon={Compass}
+            title="Search"
+            description="Search across fields, people and opportunities."
+            href="/search"
+          />
+
+          <ExploreCard
+            icon={Bookmark}
+            title="Saved"
+            description="Come back to things you want to explore later."
+            href="/saved"
+          />
+
+        </div>
+
+      </section>
+
+      {/* ============================================
+          LATEST OPPORTUNITIES
+      ============================================ */}
+
+      <section className="mb-10">
+
+        <SectionHeader
+          title="Latest opportunities"
+          subtitle="A few things worth looking at."
+          href="/search"
+          linkText="Explore all"
+        />
+
+        {opportunitiesLoading ? (
+          <LoadingText />
+        ) : opportunities.length === 0 ? (
+          <EmptyText text="No opportunities available yet." />
+        ) : (
+          <div className="grid gap-3 md:grid-cols-2">
+
+            {opportunities.map((opportunity) => (
+              <Link
+                key={opportunity.id}
+                to="/opportunities/$id"
+                params={{ id: opportunity.id }}
+                className="group rounded-2xl border border-line bg-panel p-4 transition hover:border-gold/40"
+              >
+
+                <div className="mb-2 flex items-start justify-between gap-3">
+
+                  <div className="min-w-0">
+
+                    {opportunity.category && (
+                      <span className="mb-2 inline-block rounded-md bg-gold-dim px-2 py-1 text-[10px] font-medium text-gold">
+                        {opportunity.category}
+                      </span>
+                    )}
+
+                    <h3 className="text-sm font-semibold group-hover:text-gold">
+                      {opportunity.title}
+                    </h3>
+
+                  </div>
+
+                  <ArrowRight
+                    size={14}
+                    className="mt-1 shrink-0 text-ink-faint transition group-hover:translate-x-1 group-hover:text-gold"
+                  />
+
+                </div>
+
+                {opportunity.organization && (
+                  <p className="text-xs text-ink-faint">
+                    {opportunity.organization}
+                  </p>
+                )}
+
+                {opportunity.description && (
+                  <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-ink-dim">
+                    {opportunity.description}
+                  </p>
+                )}
+
+                {opportunity.location && (
+                  <p className="mt-3 text-[11px] text-ink-faint">
+                    {opportunity.location}
+                  </p>
+                )}
+
+              </Link>
+            ))}
+
+          </div>
+        )}
+
+      </section>
+
+      {/* ============================================
+          FROM THE COMMUNITY
+      ============================================ */}
+
+      <section className="mb-10">
+
+        <SectionHeader
+          title="From the community"
+          subtitle="Recent things people are sharing."
+          href="/feed"
+          linkText="Open feed"
+        />
+
+        {postsLoading ? (
+          <LoadingText />
+        ) : posts.length === 0 ? (
+          <EmptyText text="Nothing has been shared yet." />
+        ) : (
+          <div className="space-y-3">
+
+            {posts.map((post: any) => (
+              <Link
+                key={post.id}
+                to="/feed"
+                className="block rounded-2xl border border-line bg-panel p-4 transition hover:border-gold/40"
+              >
+
+                {post.title && (
+                  <h3 className="text-sm font-semibold">
+                    {post.title}
+                  </h3>
+                )}
+
+                {post.body && (
+                  <p className="mt-1.5 line-clamp-3 text-xs leading-relaxed text-ink-dim">
+                    {post.body}
+                  </p>
+                )}
+
+              </Link>
+            ))}
+
+          </div>
+        )}
+
+      </section>
+
+      {/* ============================================
+          BOTTOM MESSAGE
+      ============================================ */}
+
+      <section className="rounded-2xl border border-line bg-panel p-6">
+
+        <div className="flex items-start gap-4">
+
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gold-dim text-gold">
+            <Sparkles size={18} />
+          </div>
+
+          <div>
+
+            <h2 className="serif text-lg font-medium">
+              There is more than one path.
+            </h2>
+
+            <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-ink-dim">
+              Follow people, explore different fields, read what others are
+              sharing, and discover possibilities you might not have searched
+              for yourself.
+            </p>
+
+          </div>
+
+        </div>
+
+      </section>
+
+    </div>
+  );
+}
+
+/* =====================================================
+   SECTION HEADER
+===================================================== */
+
+function SectionHeader({
+  title,
+  subtitle,
+  href,
+  linkText,
+}: {
+  title: string;
+  subtitle?: string;
+  href?: string;
+  linkText?: string;
+}) {
+  return (
+    <div className="mb-4 flex items-end justify-between gap-4">
+
+      <div>
+
+        <h2 className="serif text-xl font-medium">
+          {title}
+        </h2>
+
+        {subtitle && (
+          <p className="mt-1 text-xs text-ink-faint">
+            {subtitle}
+          </p>
+        )}
+
+      </div>
+
+      {href && linkText && (
+        <Link
+          to={href}
+          className="flex shrink-0 items-center gap-1 text-xs font-medium text-gold hover:underline"
         >
-          <SlidersHorizontal size={14} /> Remote
-        </button>
-      </div>
-
-      {/* Tabs */}
-      <div className="mb-6 inline-flex gap-1 rounded-2xl glass p-1">
-        {TABS.map((t) => {
-          const Icon = t.icon;
-          const active = tab === t.id;
-          return (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={`flex items-center gap-1.5 rounded-xl px-4 py-2 text-[12.5px] transition ${
-                active
-                  ? "bg-gradient-to-r from-violet/30 to-gold/25 font-semibold text-ink glow-ring"
-                  : "text-ink-dim hover:text-ink"
-              }`}
-            >
-              <Icon size={14} /> {t.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {profile.isEmpty && (
-        <div className="mb-5 rounded-2xl glass p-4 text-sm text-ink-dim">
-          Save a few opportunities and follow organizations — the feed sharpens itself with every action you take.
-        </div>
+          {linkText}
+          <ArrowRight size={13} />
+        </Link>
       )}
 
-      {isLoading && <p className="text-sm text-ink-dim">Aligning the constellation…</p>}
+    </div>
+  );
+}
 
-      {!isLoading && list.length === 0 && (
-        <div className="rounded-2xl glass p-12 text-center">
-          <p className="serif text-xl">Nothing matches yet.</p>
-          <p className="mt-2 text-sm text-ink-dim">Loosen the filters, or check the Sources page for what we track.</p>
-        </div>
-      )}
+/* =====================================================
+   EXPLORE CARD
+===================================================== */
 
-      <div className="grid gap-4 md:grid-cols-2">
-        {list.map((r, i) => (
-          <OpportunityCard key={r.item.id} o={r.item} reasons={r.reasons} index={i} />
-        ))}
+function ExploreCard({
+  icon: Icon,
+  title,
+  description,
+  href,
+}: {
+  icon: typeof Users;
+  title: string;
+  description: string;
+  href: string;
+}) {
+  return (
+    <Link
+      to={href}
+      className="group rounded-2xl border border-line bg-panel p-4 transition hover:border-gold/40"
+    >
+
+      <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-xl bg-panel-2 text-ink-dim transition group-hover:text-gold">
+        <Icon size={17} />
       </div>
+
+      <h3 className="text-sm font-semibold">
+        {title}
+      </h3>
+
+      <p className="mt-1.5 text-xs leading-relaxed text-ink-dim">
+        {description}
+      </p>
+
+    </Link>
+  );
+}
+
+/* =====================================================
+   EMPTY / LOADING
+===================================================== */
+
+function LoadingText() {
+  return (
+    <div className="rounded-2xl border border-line bg-panel p-6">
+      <p className="text-sm text-ink-dim">
+        Loading...
+      </p>
+    </div>
+  );
+}
+
+function EmptyText({ text }: { text: string }) {
+  return (
+    <div className="rounded-2xl border border-line bg-panel p-6">
+      <p className="text-sm text-ink-faint">
+        {text}
+      </p>
     </div>
   );
 }
