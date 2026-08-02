@@ -23,6 +23,7 @@ function MePage() {
   const [bio, setBio] = useState(profile?.bio ?? "");
   const [display, setDisplay] = useState(profile?.display_name ?? "");
 
+
   const saveProfile = useMutation({
     mutationFn: async () => {
       const { error } = await supabase.from("profiles").update({ bio, display_name: display }).eq("id", user!.id);
@@ -64,6 +65,7 @@ function MePage() {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-6">
+      
       {/* --- Instagram-style profile header --- */}
       <div className="mb-6 flex flex-col items-center text-center">
         <div className="flex h-24 w-24 items-center justify-center rounded-full bg-gold text-3xl font-semibold text-white ring-4 ring-panel-2">

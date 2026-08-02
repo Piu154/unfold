@@ -14,11 +14,14 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AppAdminRouteImport } from './routes/_app.admin'
 import { Route as AppDiscoverRouteImport } from './routes/_app.discover'
+import { Route as AppExploreRouteImport } from './routes/_app.explore'
 import { Route as AppFeedRouteImport } from './routes/_app.feed'
 import { Route as AppGuidesRouteImport } from './routes/_app.guides'
 import { Route as AppHiddenRouteImport } from './routes/_app.hidden'
+import { Route as AppInstitutionRouteImport } from './routes/_app.institution'
 import { Route as AppMeRouteImport } from './routes/_app.me'
 import { Route as AppNotoficationsRouteImport } from './routes/_app.notofications'
+import { Route as AppOnboardingRouteImport } from './routes/_app.onboarding'
 import { Route as AppSavedRouteImport } from './routes/_app.saved'
 import { Route as AppSearchRouteImport } from './routes/_app.search'
 import { Route as AppSettingsRouteImport } from './routes/_app.settings'
@@ -50,6 +53,11 @@ const AppDiscoverRoute = AppDiscoverRouteImport.update({
   path: '/discover',
   getParentRoute: () => AppRoute,
 } as any)
+const AppExploreRoute = AppExploreRouteImport.update({
+  id: '/explore',
+  path: '/explore',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppFeedRoute = AppFeedRouteImport.update({
   id: '/feed',
   path: '/feed',
@@ -65,6 +73,11 @@ const AppHiddenRoute = AppHiddenRouteImport.update({
   path: '/hidden',
   getParentRoute: () => AppRoute,
 } as any)
+const AppInstitutionRoute = AppInstitutionRouteImport.update({
+  id: '/institution',
+  path: '/institution',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppMeRoute = AppMeRouteImport.update({
   id: '/me',
   path: '/me',
@@ -73,6 +86,11 @@ const AppMeRoute = AppMeRouteImport.update({
 const AppNotoficationsRoute = AppNotoficationsRouteImport.update({
   id: '/notofications',
   path: '/notofications',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppOnboardingRoute = AppOnboardingRouteImport.update({
+  id: '/onboarding',
+  path: '/onboarding',
   getParentRoute: () => AppRoute,
 } as any)
 const AppSavedRoute = AppSavedRouteImport.update({
@@ -111,11 +129,14 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/admin': typeof AppAdminRoute
   '/discover': typeof AppDiscoverRoute
+  '/explore': typeof AppExploreRoute
   '/feed': typeof AppFeedRoute
   '/guides': typeof AppGuidesRouteWithChildren
   '/hidden': typeof AppHiddenRoute
+  '/institution': typeof AppInstitutionRoute
   '/me': typeof AppMeRoute
   '/notofications': typeof AppNotoficationsRoute
+  '/onboarding': typeof AppOnboardingRoute
   '/saved': typeof AppSavedRoute
   '/search': typeof AppSearchRoute
   '/settings': typeof AppSettingsRoute
@@ -128,11 +149,14 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/admin': typeof AppAdminRoute
   '/discover': typeof AppDiscoverRoute
+  '/explore': typeof AppExploreRoute
   '/feed': typeof AppFeedRoute
   '/guides': typeof AppGuidesRouteWithChildren
   '/hidden': typeof AppHiddenRoute
+  '/institution': typeof AppInstitutionRoute
   '/me': typeof AppMeRoute
   '/notofications': typeof AppNotoficationsRoute
+  '/onboarding': typeof AppOnboardingRoute
   '/saved': typeof AppSavedRoute
   '/search': typeof AppSearchRoute
   '/settings': typeof AppSettingsRoute
@@ -147,11 +171,14 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/_app/admin': typeof AppAdminRoute
   '/_app/discover': typeof AppDiscoverRoute
+  '/_app/explore': typeof AppExploreRoute
   '/_app/feed': typeof AppFeedRoute
   '/_app/guides': typeof AppGuidesRouteWithChildren
   '/_app/hidden': typeof AppHiddenRoute
+  '/_app/institution': typeof AppInstitutionRoute
   '/_app/me': typeof AppMeRoute
   '/_app/notofications': typeof AppNotoficationsRoute
+  '/_app/onboarding': typeof AppOnboardingRoute
   '/_app/saved': typeof AppSavedRoute
   '/_app/search': typeof AppSearchRoute
   '/_app/settings': typeof AppSettingsRoute
@@ -166,11 +193,14 @@ export interface FileRouteTypes {
     | '/auth'
     | '/admin'
     | '/discover'
+    | '/explore'
     | '/feed'
     | '/guides'
     | '/hidden'
+    | '/institution'
     | '/me'
     | '/notofications'
+    | '/onboarding'
     | '/saved'
     | '/search'
     | '/settings'
@@ -183,11 +213,14 @@ export interface FileRouteTypes {
     | '/auth'
     | '/admin'
     | '/discover'
+    | '/explore'
     | '/feed'
     | '/guides'
     | '/hidden'
+    | '/institution'
     | '/me'
     | '/notofications'
+    | '/onboarding'
     | '/saved'
     | '/search'
     | '/settings'
@@ -201,11 +234,14 @@ export interface FileRouteTypes {
     | '/auth'
     | '/_app/admin'
     | '/_app/discover'
+    | '/_app/explore'
     | '/_app/feed'
     | '/_app/guides'
     | '/_app/hidden'
+    | '/_app/institution'
     | '/_app/me'
     | '/_app/notofications'
+    | '/_app/onboarding'
     | '/_app/saved'
     | '/_app/search'
     | '/_app/settings'
@@ -257,6 +293,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppDiscoverRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/explore': {
+      id: '/_app/explore'
+      path: '/explore'
+      fullPath: '/explore'
+      preLoaderRoute: typeof AppExploreRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/feed': {
       id: '/_app/feed'
       path: '/feed'
@@ -278,6 +321,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppHiddenRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/institution': {
+      id: '/_app/institution'
+      path: '/institution'
+      fullPath: '/institution'
+      preLoaderRoute: typeof AppInstitutionRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/me': {
       id: '/_app/me'
       path: '/me'
@@ -290,6 +340,13 @@ declare module '@tanstack/react-router' {
       path: '/notofications'
       fullPath: '/notofications'
       preLoaderRoute: typeof AppNotoficationsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/onboarding': {
+      id: '/_app/onboarding'
+      path: '/onboarding'
+      fullPath: '/onboarding'
+      preLoaderRoute: typeof AppOnboardingRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/saved': {
@@ -352,11 +409,14 @@ const AppGuidesRouteWithChildren = AppGuidesRoute._addFileChildren(
 interface AppRouteChildren {
   AppAdminRoute: typeof AppAdminRoute
   AppDiscoverRoute: typeof AppDiscoverRoute
+  AppExploreRoute: typeof AppExploreRoute
   AppFeedRoute: typeof AppFeedRoute
   AppGuidesRoute: typeof AppGuidesRouteWithChildren
   AppHiddenRoute: typeof AppHiddenRoute
+  AppInstitutionRoute: typeof AppInstitutionRoute
   AppMeRoute: typeof AppMeRoute
   AppNotoficationsRoute: typeof AppNotoficationsRoute
+  AppOnboardingRoute: typeof AppOnboardingRoute
   AppSavedRoute: typeof AppSavedRoute
   AppSearchRoute: typeof AppSearchRoute
   AppSettingsRoute: typeof AppSettingsRoute
@@ -367,11 +427,14 @@ interface AppRouteChildren {
 const AppRouteChildren: AppRouteChildren = {
   AppAdminRoute: AppAdminRoute,
   AppDiscoverRoute: AppDiscoverRoute,
+  AppExploreRoute: AppExploreRoute,
   AppFeedRoute: AppFeedRoute,
   AppGuidesRoute: AppGuidesRouteWithChildren,
   AppHiddenRoute: AppHiddenRoute,
+  AppInstitutionRoute: AppInstitutionRoute,
   AppMeRoute: AppMeRoute,
   AppNotoficationsRoute: AppNotoficationsRoute,
+  AppOnboardingRoute: AppOnboardingRoute,
   AppSavedRoute: AppSavedRoute,
   AppSearchRoute: AppSearchRoute,
   AppSettingsRoute: AppSettingsRoute,

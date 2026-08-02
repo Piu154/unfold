@@ -4,37 +4,26 @@ import {
   ArrowRight,
   Bookmark,
   Compass,
-  Users,
-  Rss,
   Search,
   Sparkles,
+  Users,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/lib/auth";
 
-export const Route = createFileRoute("/_app/discover")({
-  head: () => ({
-    meta: [
-      { title: "Discover — Unfold" },
-      {
-        name: "description",
-        content:
-          "Discover people, ideas, conversations and opportunities around what interests you.",
-      },
-    ],
-  }),
-  component: DiscoverPage,
+export const Route = createFileRoute("/_app/explore")({
+  component: ExplorePage,
 });
 
-function DiscoverPage() {
+function ExplorePage() {
   const { user } = useSession();
 
   /* ---------------------------------------------
    * PROFILE
    * --------------------------------------------- */
 
-  const { data: profile, isLoading: profileLoading } = useQuery({
-    queryKey: ["discover-profile", user?.id],
+  const { data: profile } = useQuery({
+    queryKey: ["explore-profile", user?.id],
     enabled: !!user,
     queryFn: async () => {
       const { data, error } = await supabase
@@ -43,8 +32,8 @@ function DiscoverPage() {
           display_name,
           username,
           interests,
-          education,
           skills,
+          education,
           career_goal,
           location,
           headline
@@ -60,16 +49,10 @@ function DiscoverPage() {
 
   /* ---------------------------------------------
    * OPPORTUNITIES
-   *
-   * Fetch more than we display so we can
-   * personalize the results.
    * --------------------------------------------- */
 
-  const {
-    data: opportunities = [],
-    isLoading: opportunitiesLoading,
-  } = useQuery({
-    queryKey: ["discover-opportunities"],
+  const { data: opportunities = [], isLoading } = useQuery({
+    queryKey: ["explore-opportunities"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("opportunities")
@@ -86,46 +69,52 @@ function DiscoverPage() {
   });
 
   /* ---------------------------------------------
-   * RECENT POSTS
+   * GUIDES
    * --------------------------------------------- */
 
-  const { data: posts = [], isLoading: postsLoading } = useQuery({
-    queryKey: ["discover-posts"],
+  const { data: guides = [] } = useQuery({
+    queryKey: ["explore-guides"],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("feed_posts")
-        .select("*")
+        .from("guides")
+        .select("id, user_id, field, verified")
+        .eq("accepting_bookings", true)
         .order("created_at", { ascending: false })
-        .limit(3);
+        .limit(6);
 
       if (error) throw error;
 
-      return data ?? [];
+      if (!data?.length) return [];
+
+      const userIds = data.map((guide) => guide.user_id);
+
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, display_name, username, avatar_url")
+        .in("id", userIds);
+
+      const profileMap = new Map(
+        (profiles ?? []).map((profile) => [
+          profile.id,
+          profile,
+        ])
+      );
+
+      return data.map((guide) => ({
+        ...guide,
+        profile: profileMap.get(guide.user_id) ?? null,
+      }));
     },
   });
 
   /* ---------------------------------------------
-   * PROFILE DATA
+   * PERSONALIZATION
    * --------------------------------------------- */
-
-  const displayName =
-    profile?.display_name ||
-    profile?.username ||
-    "there";
 
   const interests = profile?.interests ?? [];
-
   const skills = profile?.skills ?? [];
 
-  /* ---------------------------------------------
-   * PERSONALIZATION
-   *
-   * Current opportunities table has no structured
-   * skills/domain fields, so we use the text that
-   * already exists in the opportunity.
-   * --------------------------------------------- */
-
-  const userInterests = [
+  const keywords = [
     ...interests,
     ...skills,
     profile?.education,
@@ -133,12 +122,11 @@ function DiscoverPage() {
     profile?.location,
   ]
     .filter(Boolean)
-    .map((value) => value!.toString().toLowerCase().trim())
-    .filter(Boolean);
+    .map((value) => value!.toString().toLowerCase().trim());
 
   const personalizedOpportunities = opportunities
     .map((opportunity) => {
-      const opportunityText = [
+      const text = [
         opportunity.title,
         opportunity.description,
         opportunity.category,
@@ -149,36 +137,23 @@ function DiscoverPage() {
         .join(" ")
         .toLowerCase();
 
-      const matchedInterests = userInterests.filter((interest) =>
-        opportunityText.includes(interest)
+      const matches = keywords.filter((keyword) =>
+        text.includes(keyword)
       );
 
       return {
         ...opportunity,
-        matchCount: matchedInterests.length,
-        matchedInterests,
+        matches,
+        score: matches.length,
       };
     })
-    .sort((a, b) => {
-      /* First prioritize personalized matches */
-      if (b.matchCount !== a.matchCount) {
-        return b.matchCount - a.matchCount;
-      }
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 4);
 
-      /* Then featured opportunities */
-      if (b.featured !== a.featured) {
-        return Number(b.featured) - Number(a.featured);
-      }
-
-      return 0;
-    });
-
-  /*
-   * Only show the first 4 on Discover.
-   * Full search stays on /search.
-   */
-  const displayedOpportunities =
-    personalizedOpportunities.slice(0, 4);
+  const displayName =
+    profile?.display_name ||
+    profile?.username ||
+    "there";
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-7">
@@ -187,10 +162,10 @@ function DiscoverPage() {
           HERO
       ============================================ */}
 
-      <section className="mb-8">
+      <section className="mb-9">
 
         <p className="mb-2 text-xs font-medium uppercase tracking-wider text-gold">
-          Discover
+          Your exploration
         </p>
 
         <h1 className="serif text-3xl font-medium tracking-tight sm:text-4xl">
@@ -198,97 +173,38 @@ function DiscoverPage() {
         </h1>
 
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-ink-dim">
-          Explore people, ideas, conversations and opportunities that might
-          take you somewhere unexpected.
+          There is more than one path. Explore opportunities, people,
+          fields and ideas that could take you somewhere unexpected.
         </p>
 
       </section>
 
       {/* ============================================
-          QUICK SEARCH
-      ============================================ */}
-
-      <Link
-        to="/search"
-        className="mb-8 flex max-w-3xl items-center gap-3 rounded-2xl border border-line bg-panel px-4 py-3.5 transition hover:border-gold/40"
-      >
-        <Search size={17} className="text-ink-faint" />
-
-        <span className="flex-1 text-sm text-ink-faint">
-          Search people, fields, opportunities...
-        </span>
-
-        <span className="hidden text-xs text-gold sm:block">
-          Explore
-        </span>
-
-        <ArrowRight size={15} className="text-ink-faint" />
-      </Link>
-
-      {/* ============================================
-          YOUR INTERESTS
-      ============================================ */}
-
-      {!profileLoading && interests.length > 0 && (
-        <section className="mb-9">
-
-          <SectionHeader
-            title="Your interests"
-            subtitle="Things you've told Unfold you're curious about."
-          />
-
-          <div className="flex flex-wrap gap-2">
-            {interests.slice(0, 10).map((interest: string) => (
-              <span
-                key={interest}
-                className="rounded-full border border-line bg-panel px-3 py-1.5 text-xs text-ink-dim"
-              >
-                {interest}
-              </span>
-            ))}
-          </div>
-
-        </section>
-      )}
-
-      {/* ============================================
-          EXPLORE UNFOLD
+          QUICK ACTIONS
       ============================================ */}
 
       <section className="mb-10">
 
-        <SectionHeader
-          title="Explore Unfold"
-          subtitle="Start wherever your curiosity takes you."
-        />
+        <div className="grid gap-3 sm:grid-cols-3">
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-
-          <ExploreCard
-            icon={Users}
-            title="People & Guides"
-            description="Discover people sharing knowledge and experience."
-            href="/guides"
-          />
-
-          <ExploreCard
-            icon={Rss}
-            title="Feed"
-            description="See what people are sharing and discussing."
-            href="/feed"
-          />
-
-          <ExploreCard
-            icon={Compass}
-            title="Search"
-            description="Search across fields, people and opportunities."
+          <QuickCard
+            icon={Search}
+            title="Find something"
+            description="Search opportunities, people and fields."
             href="/search"
           />
 
-          <ExploreCard
+          <QuickCard
+            icon={Users}
+            title="Meet guides"
+            description="Learn from people with real experience."
+            href="/guides"
+          />
+
+          <QuickCard
             icon={Bookmark}
-            title="Saved"
-            description="Come back to things you want to explore later."
+            title="Your saved"
+            description="Return to things you want to explore."
             href="/saved"
           />
 
@@ -297,34 +213,62 @@ function DiscoverPage() {
       </section>
 
       {/* ============================================
-          PERSONALIZED OPPORTUNITIES
+          YOUR INTERESTS
+      ============================================ */}
+
+      {interests.length > 0 && (
+        <section className="mb-10">
+
+          <SectionHeader
+            title="What you're curious about"
+            subtitle="Your interests help Unfold understand what you may want to explore."
+          />
+
+          <div className="flex flex-wrap gap-2">
+
+            {interests.slice(0, 12).map((interest: string) => (
+              <span
+                key={interest}
+                className="rounded-full border border-line bg-panel px-3 py-1.5 text-xs text-ink-dim"
+              >
+                {interest}
+              </span>
+            ))}
+
+          </div>
+
+        </section>
+      )}
+
+      {/* ============================================
+          FOR YOU
       ============================================ */}
 
       <section className="mb-10">
 
         <SectionHeader
-          title="Opportunities for you"
-          subtitle="Based on what you're curious about."
+          title="Worth exploring"
+          subtitle="Opportunities that may connect with your interests and goals."
           href="/search"
-          linkText="Explore all"
+          linkText="See all"
         />
 
-        {opportunitiesLoading ? (
-          <LoadingText />
-        ) : displayedOpportunities.length === 0 ? (
-          <EmptyText text="No opportunities available yet." />
+        {isLoading ? (
+          <Loading />
+        ) : personalizedOpportunities.length === 0 ? (
+          <Empty text="No opportunities available yet." />
         ) : (
           <div className="grid gap-3 md:grid-cols-2">
 
-            {displayedOpportunities.map((opportunity) => (
+            {personalizedOpportunities.map((opportunity) => (
               <Link
                 key={opportunity.id}
                 to="/opportunities/$id"
                 params={{ id: opportunity.id }}
-                className="group rounded-2xl border border-line bg-panel p-4 transition hover:border-gold/40"
+                className="group rounded-2xl border border-line bg-panel p-5 transition hover:border-gold/40"
               >
 
-                <div className="mb-2 flex items-start justify-between gap-3">
+                <div className="flex items-start justify-between gap-4">
 
                   <div className="min-w-0">
 
@@ -341,14 +285,14 @@ function DiscoverPage() {
                   </div>
 
                   <ArrowRight
-                    size={14}
+                    size={15}
                     className="mt-1 shrink-0 text-ink-faint transition group-hover:translate-x-1 group-hover:text-gold"
                   />
 
                 </div>
 
                 {opportunity.organization && (
-                  <p className="text-xs text-ink-faint">
+                  <p className="mt-2 text-xs text-ink-faint">
                     {opportunity.organization}
                   </p>
                 )}
@@ -359,23 +303,15 @@ function DiscoverPage() {
                   </p>
                 )}
 
-                {opportunity.location && (
-                  <p className="mt-3 text-[11px] text-ink-faint">
-                    {opportunity.location}
-                  </p>
-                )}
-
-                {/* MATCH INDICATOR */}
-
-                {opportunity.matchCount > 0 && (
+                {opportunity.matches.length > 0 && (
                   <div className="mt-3 flex flex-wrap gap-1.5">
 
-                    {opportunity.matchedInterests
+                    {opportunity.matches
                       .slice(0, 3)
                       .map((match: string) => (
                         <span
                           key={match}
-                          className="rounded-md bg-gold-dim px-2 py-0.5 text-[10px] font-medium text-gold"
+                          className="rounded-md bg-gold-dim px-2 py-0.5 text-[10px] text-gold"
                         >
                           {match}
                         </span>
@@ -393,45 +329,69 @@ function DiscoverPage() {
       </section>
 
       {/* ============================================
-          FROM THE COMMUNITY
+          GUIDES
       ============================================ */}
 
       <section className="mb-10">
 
         <SectionHeader
-          title="From the community"
-          subtitle="Recent things people are sharing."
-          href="/feed"
-          linkText="Open feed"
+          title="People worth discovering"
+          subtitle="Guides and experts who are open to connecting."
+          href="/guides"
+          linkText="See all"
         />
 
-        {postsLoading ? (
-          <LoadingText />
-        ) : posts.length === 0 ? (
-          <EmptyText text="Nothing has been shared yet." />
+        {guides.length === 0 ? (
+          <Empty text="No guides are available yet." />
         ) : (
-          <div className="space-y-3">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
 
-            {posts.map((post: any) => (
+            {guides.map((guide) => (
+
               <Link
-                key={post.id}
-                to="/feed"
-                className="block rounded-2xl border border-line bg-panel p-4 transition hover:border-gold/40"
+                key={guide.id}
+                to="/guides/$id"
+                params={{ id: guide.id }}
+                className="group rounded-2xl border border-line bg-panel p-4 transition hover:border-gold/40"
               >
 
-                {post.title && (
-                  <h3 className="text-sm font-semibold">
-                    {post.title}
-                  </h3>
-                )}
+                <div className="flex items-center gap-3">
 
-                {post.body && (
-                  <p className="mt-1.5 line-clamp-3 text-xs leading-relaxed text-ink-dim">
-                    {post.body}
-                  </p>
-                )}
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gold-dim text-sm font-semibold text-gold">
+                    {getInitials(
+                      guide.profile?.display_name
+                    )}
+                  </div>
+
+                  <div className="min-w-0">
+
+                    <div className="flex items-center gap-1">
+
+                      <p className="truncate text-sm font-semibold group-hover:text-gold">
+                        {guide.profile?.display_name ||
+                          "Guide"}
+                      </p>
+
+                      {guide.verified && (
+                        <span className="text-[10px] text-gold">
+                          ✓
+                        </span>
+                      )}
+
+                    </div>
+
+                    {guide.field && (
+                      <p className="mt-0.5 truncate text-xs text-ink-faint">
+                        {guide.field}
+                      </p>
+                    )}
+
+                  </div>
+
+                </div>
 
               </Link>
+
             ))}
 
           </div>
@@ -440,7 +400,7 @@ function DiscoverPage() {
       </section>
 
       {/* ============================================
-          BOTTOM MESSAGE
+          DISCOVER SOMETHING UNEXPECTED
       ============================================ */}
 
       <section className="rounded-2xl border border-line bg-panel p-6">
@@ -451,17 +411,24 @@ function DiscoverPage() {
             <Sparkles size={18} />
           </div>
 
-          <div>
+          <div className="flex-1">
 
             <h2 className="serif text-lg font-medium">
-              There is more than one path.
+              Don't know what to look for?
             </h2>
 
             <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-ink-dim">
-              Follow people, explore different fields, read what others are
-              sharing, and discover possibilities you might not have searched
-              for yourself.
+              That's okay. You don't have to know your destination
+              before you start exploring.
             </p>
+
+            <Link
+              to="/discover"
+              className="mt-4 inline-flex items-center gap-1.5 text-xs font-medium text-gold hover:underline"
+            >
+              Discover something unexpected
+              <ArrowRight size={13} />
+            </Link>
 
           </div>
 
@@ -470,6 +437,43 @@ function DiscoverPage() {
       </section>
 
     </div>
+  );
+}
+
+/* =====================================================
+   QUICK CARD
+===================================================== */
+
+function QuickCard({
+  icon: Icon,
+  title,
+  description,
+  href,
+}: {
+  icon: typeof Search;
+  title: string;
+  description: string;
+  href: string;
+}) {
+  return (
+    <Link
+      to={href}
+      className="group rounded-2xl border border-line bg-panel p-4 transition hover:border-gold/40"
+    >
+
+      <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-xl bg-panel-2 text-ink-dim group-hover:text-gold">
+        <Icon size={17} />
+      </div>
+
+      <h3 className="text-sm font-semibold group-hover:text-gold">
+        {title}
+      </h3>
+
+      <p className="mt-1.5 text-xs leading-relaxed text-ink-dim">
+        {description}
+      </p>
+
+    </Link>
   );
 }
 
@@ -520,47 +524,22 @@ function SectionHeader({
 }
 
 /* =====================================================
-   EXPLORE CARD
+   HELPERS
 ===================================================== */
 
-function ExploreCard({
-  icon: Icon,
-  title,
-  description,
-  href,
-}: {
-  icon: typeof Users;
-  title: string;
-  description: string;
-  href: string;
-}) {
-  return (
-    <Link
-      to={href}
-      className="group rounded-2xl border border-line bg-panel p-4 transition hover:border-gold/40"
-    >
+function getInitials(
+  name: string | null | undefined
+) {
+  if (!name) return "U";
 
-      <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-xl bg-panel-2 text-ink-dim transition group-hover:text-gold">
-        <Icon size={17} />
-      </div>
-
-      <h3 className="text-sm font-semibold">
-        {title}
-      </h3>
-
-      <p className="mt-1.5 text-xs leading-relaxed text-ink-dim">
-        {description}
-      </p>
-
-    </Link>
-  );
+  return name
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
 }
 
-/* =====================================================
-   EMPTY / LOADING
-===================================================== */
-
-function LoadingText() {
+function Loading() {
   return (
     <div className="rounded-2xl border border-line bg-panel p-6">
       <p className="text-sm text-ink-dim">
@@ -570,7 +549,11 @@ function LoadingText() {
   );
 }
 
-function EmptyText({ text }: { text: string }) {
+function Empty({
+  text,
+}: {
+  text: string;
+}) {
   return (
     <div className="rounded-2xl border border-line bg-panel p-6">
       <p className="text-sm text-ink-faint">
