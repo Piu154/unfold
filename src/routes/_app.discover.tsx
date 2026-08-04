@@ -175,6 +175,7 @@ function DiscoverPage() {
             className="w-full rounded-xl border border-line bg-panel py-3 pl-10 pr-4 text-sm outline-none transition focus:border-gold"
           />
 
+
         </div>
 
         <button
