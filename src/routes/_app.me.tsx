@@ -1,115 +1,69 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useMyGuide, useMyProfile, useSession } from "@/lib/auth";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
+
 import {
-  ArrowLeft,
   Bookmark,
   CalendarDays,
-  Clock,
-  Grid3X3,
-  Plus,
-  Sparkles,
-  Trash2,
   CheckCircle2,
-  UserRoundPlus,
+  Clock,
+  Edit3,
+  Plus,
+  Trash2,
+  UserRound,
+  Users,
+  Building2,
+  Sparkles,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_app/me")({
   head: () => ({
-    meta: [{ title: "My profile — Unfold" }],
+    meta: [{ title: "Profile — Unfold" }],
   }),
   component: MePage,
 });
 
-type GuideRow =
-  | {
-      id: string;
-      headline: string;
-      bio: string;
-      field: string;
-      accepting_bookings: boolean;
-      verified: boolean;
-      affiliations: string[] | null;
-    }
-  | null
-  | undefined;
+type ProfileType = "personal" | "guide" | "organization";
+
+function initials(name?: string | null) {
+  if (!name) return "U";
+
+  return name
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((x) => x[0]?.toUpperCase())
+    .join("");
+}
 
 function MePage() {
   const { user } = useSession();
   const { data: profile } = useMyProfile();
   const { data: guide, refetch: refetchGuide } = useMyGuide();
+
   const qc = useQueryClient();
 
-  const [tab, setTab] = useState<"saved" | "bookings" | "guide">("saved");
-  const [editingProfile, setEditingProfile] = useState(false);
+  const [editing, setEditing] = useState(false);
 
-  const [display, setDisplay] = useState(profile?.display_name ?? "");
-  const [bio, setBio] = useState(profile?.bio ?? "");
+  const [displayName, setDisplayName] = useState("");
+  const [bio, setBio] = useState("");
 
-  const saveProfile = useMutation({
-    mutationFn: async () => {
-      if (!user) throw new Error("Sign in required");
+  const profileType: ProfileType =
+    (profile?.profile_type as ProfileType) ?? "personal";
 
-      const { error } = await supabase
-        .from("profiles")
-        .update({
-          display_name: display.trim(),
-          bio: bio.trim(),
-        })
-        .eq("id", user.id);
+  useEffect(() => {
+    setDisplayName(profile?.display_name ?? "");
+    setBio(profile?.bio ?? "");
+  }, [profile]);
 
-      if (error) throw error;
-    },
-
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["my-profile", user?.id] });
-      toast.success("Profile updated");
-      setEditingProfile(false);
-    },
-
-    onError: (e) => {
-      toast.error(e instanceof Error ? e.message : "Failed");
-    },
-  });
-
-  const becomeGuide = useMutation({
-    mutationFn: async (input: {
-      headline: string;
-      bio: string;
-      field: string;
-      affiliations: string[];
-    }) => {
-      if (!user) throw new Error("You must be logged in");
-
-      const { error } = await supabase.rpc("become_a_guide", {
-        p_headline: input.headline,
-        p_bio: input.bio,
-        p_field: input.field,
-        p_affiliations: input.affiliations,
-      });
-
-      if (error) throw error;
-    },
-
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ["my-guide", user?.id] });
-      await qc.invalidateQueries({ queryKey: ["my-roles", user?.id] });
-      await qc.invalidateQueries({ queryKey: ["guides-list"] });
-      await refetchGuide();
-
-      toast.success("You're now a guide!");
-    },
-
-    onError: (e) => {
-      toast.error(
-        e instanceof Error ? e.message : "Could not activate Guide Mode"
-      );
-    },
-  });
+  /*
+   * ---------------------------------------------------------
+   * SAVED OPPORTUNITIES
+   * ---------------------------------------------------------
+   */
 
   const { data: saved } = useQuery({
     queryKey: ["my-saved", user?.id],
@@ -123,9 +77,15 @@ function MePage() {
 
       if (error) throw error;
 
-      return data;
+      return data ?? [];
     },
   });
+
+  /*
+   * ---------------------------------------------------------
+   * BOOKINGS
+   * ---------------------------------------------------------
+   */
 
   const { data: bookings } = useQuery({
     queryKey: ["my-bookings", user?.id],
@@ -142,22 +102,114 @@ function MePage() {
 
       if (error) throw error;
 
-      return data;
+      return data ?? [];
     },
   });
+
+  /*
+   * ---------------------------------------------------------
+   * PROFILE UPDATE
+   * ---------------------------------------------------------
+   */
+
+  const updateProfile = useMutation({
+    mutationFn: async () => {
+      if (!user) throw new Error("Sign in required");
+
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          display_name: displayName.trim(),
+          bio: bio.trim(),
+        })
+        .eq("id", user.id);
+
+      if (error) throw error;
+    },
+
+    onSuccess: async () => {
+      await qc.invalidateQueries({
+        queryKey: ["my-profile", user?.id],
+      });
+
+      toast.success("Profile updated");
+      setEditing(false);
+    },
+
+    onError: (error) => {
+      toast.error(
+        error instanceof Error ? error.message : "Could not update profile"
+      );
+    },
+  });
+
+  /*
+   * ---------------------------------------------------------
+   * PROFILE TYPE
+   * ---------------------------------------------------------
+   */
+
+  const changeProfileType = useMutation({
+    mutationFn: async (type: ProfileType) => {
+      if (!user) throw new Error("Sign in required");
+
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          profile_type: type,
+        })
+        .eq("id", user.id);
+
+      if (error) throw error;
+    },
+
+    onSuccess: async () => {
+      await qc.invalidateQueries({
+        queryKey: ["my-profile", user?.id],
+      });
+
+      toast.success("Profile type updated");
+    },
+
+    onError: (error) => {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Could not change profile type"
+      );
+    },
+  });
+
+  /*
+   * ---------------------------------------------------------
+   * COUNTS
+   * ---------------------------------------------------------
+   */
 
   const savedCount = saved?.length ?? 0;
   const bookingsCount = bookings?.length ?? 0;
 
-  const isGuide = !!guide;
+  /*
+   * ---------------------------------------------------------
+   * PAGE
+   * ---------------------------------------------------------
+   */
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-6">
-      {/* PROFILE HEADER */}
-      <section className="mb-6">
+
+      {/* =====================================================
+          PROFILE HEADER
+      ===================================================== */}
+
+      <section className="mb-7">
+
         <div className="flex flex-col items-center text-center">
+
           {/* Avatar */}
+
           <div className="relative">
+
             {profile?.avatar_url ? (
               <img
                 src={profile.avatar_url}
@@ -166,36 +218,52 @@ function MePage() {
               />
             ) : (
               <div className="flex h-24 w-24 items-center justify-center rounded-full bg-gold text-3xl font-semibold text-white ring-4 ring-panel-2">
-                {(profile?.display_name ?? user?.email ?? "U")[0]?.toUpperCase()}
+                {initials(profile?.display_name ?? user?.email)}
               </div>
             )}
 
-            {isGuide && (
-              <div className="absolute bottom-0 right-0 rounded-full bg-sage p-1.5 text-white">
+            {profileType === "guide" && (
+              <div className="absolute bottom-0 right-0 rounded-full bg-gold p-1.5 text-white">
                 <CheckCircle2 size={14} />
               </div>
             )}
+
+            {profileType === "organization" && (
+              <div className="absolute bottom-0 right-0 rounded-full bg-sage p-1.5 text-white">
+                <Building2 size={14} />
+              </div>
+            )}
+
           </div>
 
           {/* Name */}
-          {editingProfile ? (
+
+          {editing ? (
             <input
-              value={display}
-              onChange={(e) => setDisplay(e.target.value)}
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
               className="mt-3 w-full max-w-xs rounded-lg border border-line bg-bg px-3 py-2 text-center text-lg font-semibold outline-none focus:border-gold"
             />
           ) : (
-            <h1 className="serif mt-3 text-lg font-semibold">
+            <h1 className="serif mt-3 text-xl font-semibold">
               {profile?.display_name ?? "Unnamed"}
             </h1>
           )}
 
-          <p className="text-[11.5px] text-ink-faint">
-            {profile?.username ? `@${profile.username}` : user?.email}
+          <p className="mt-1 text-[11px] text-ink-faint">
+            {profile?.username
+              ? `@${profile.username}`
+              : user?.email}
           </p>
 
+          {/* Profile type */}
+
+          <ProfileTypeBadge type={profileType} />
+
           {/* Stats */}
-          <div className="mt-4 flex w-full max-w-xs divide-x divide-line rounded-xl border border-line bg-panel">
+
+          <div className="mt-4 flex w-full max-w-sm divide-x divide-line rounded-xl border border-line bg-panel">
+
             <div className="flex-1 py-3">
               <p className="text-sm font-semibold">{savedCount}</p>
               <p className="text-[10px] uppercase tracking-wide text-ink-faint">
@@ -212,339 +280,359 @@ function MePage() {
 
             <div className="flex-1 py-3">
               <p className="text-sm font-semibold">
-                {isGuide ? "Guide" : "User"}
+                {profileType === "personal"
+                  ? "Personal"
+                  : profileType === "guide"
+                    ? "Guide"
+                    : "Organization"}
               </p>
+
               <p className="text-[10px] uppercase tracking-wide text-ink-faint">
-                Status
+                Profile
               </p>
             </div>
+
           </div>
 
           {/* Bio */}
-          {editingProfile ? (
+
+          {editing ? (
             <textarea
               value={bio}
               onChange={(e) => setBio(e.target.value)}
               rows={3}
-              maxLength={280}
-              placeholder="Tell people a little about yourself."
-              className="mt-4 w-full max-w-xs rounded-lg border border-line bg-bg px-3 py-2 text-center text-sm outline-none focus:border-gold"
+              maxLength={500}
+              placeholder="Tell people about yourself."
+              className="mt-4 w-full max-w-md rounded-lg border border-line bg-bg px-3 py-2 text-center text-sm outline-none focus:border-gold"
             />
           ) : (
             profile?.bio && (
-              <p className="mt-4 max-w-xs text-sm leading-relaxed text-ink-dim">
+              <p className="mt-4 max-w-md text-sm leading-relaxed text-ink-dim">
                 {profile.bio}
               </p>
             )
           )}
 
-          {/* Profile buttons */}
-          {editingProfile ? (
+          {/* Edit */}
+
+          {editing ? (
             <div className="mt-3 flex gap-2">
+
               <button
-                onClick={() => saveProfile.mutate()}
-                disabled={saveProfile.isPending}
-                className="rounded-lg bg-gold px-4 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                onClick={() => updateProfile.mutate()}
+                disabled={updateProfile.isPending}
+                className="rounded-lg bg-gold px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"
               >
-                {saveProfile.isPending ? "Saving..." : "Save"}
+                {updateProfile.isPending ? "Saving..." : "Save"}
               </button>
 
               <button
                 onClick={() => {
-                  setEditingProfile(false);
-                  setDisplay(profile?.display_name ?? "");
+                  setEditing(false);
+                  setDisplayName(profile?.display_name ?? "");
                   setBio(profile?.bio ?? "");
                 }}
-                className="rounded-lg border border-line px-4 py-1.5 text-xs font-medium text-ink-dim"
+                className="rounded-lg border border-line px-4 py-2 text-xs"
               >
                 Cancel
               </button>
+
             </div>
           ) : (
             <button
-              onClick={() => {
-                setDisplay(profile?.display_name ?? "");
-                setBio(profile?.bio ?? "");
-                setEditingProfile(true);
-              }}
-              className="mt-3 rounded-lg border border-line px-4 py-1.5 text-xs font-medium hover:bg-panel-2"
+              onClick={() => setEditing(true)}
+              className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-line px-4 py-2 text-xs font-medium hover:bg-panel-2"
             >
+              <Edit3 size={13} />
               Edit profile
             </button>
           )}
+
         </div>
+
       </section>
 
-      {/* TABS */}
-      <div className="mb-1 flex border-t border-line">
-        {[
-          { key: "saved" as const, label: "Saved", icon: Grid3X3 },
-          { key: "bookings" as const, label: "Bookings", icon: CalendarDays },
-          { key: "guide" as const, label: "Guide", icon: Sparkles },
-        ].map(({ key, label, icon: Icon }) => (
-          <button
-            key={key}
-            onClick={() => setTab(key)}
-            className={`flex flex-1 items-center justify-center gap-1.5 border-t-2 py-3 text-[11px] font-medium uppercase tracking-wide ${
-              tab === key
-                ? "border-gold text-gold"
-                : "border-transparent text-ink-faint"
-            }`}
-          >
-            <Icon size={15} />
-            {label}
-          </button>
-        ))}
-      </div>
 
-      {/* SAVED */}
-      {tab === "saved" && <SavedTab saved={saved ?? []} />}
+      {/* =====================================================
+          PROFILE TYPE
+      ===================================================== */}
 
-      {/* BOOKINGS */}
-      {tab === "bookings" && <BookingsTab bookings={bookings ?? []} />}
+      <ProfileTypeSection
+        currentType={profileType}
+        onChange={(type) => changeProfileType.mutate(type)}
+        loading={changeProfileType.isPending}
+      />
 
-      {/* GUIDE */}
-      {tab === "guide" && (
-        <div className="mt-4">
-          {guide ? (
-            <GuideDashboard guide={guide} refetch={refetchGuide} />
-          ) : (
-            <BecomeGuideCard
-              onBecome={(values) => becomeGuide.mutate(values)}
-              isPending={becomeGuide.isPending}
-            />
-          )}
-        </div>
+
+      {/* =====================================================
+          PERSONAL USER
+      ===================================================== */}
+
+      {profileType === "personal" && (
+        <PersonalProfile
+          saved={saved ?? []}
+          bookings={bookings ?? []}
+        />
       )}
+
+
+      {/* =====================================================
+          GUIDE
+      ===================================================== */}
+
+      {profileType === "guide" && (
+        <GuideProfile
+          guide={guide}
+          refetchGuide={refetchGuide}
+          bookings={bookings ?? []}
+        />
+      )}
+
+
+      {/* =====================================================
+          ORGANIZATION
+      ===================================================== */}
+
+      {profileType === "organization" && (
+        <OrganizationProfile />
+      )}
+
     </div>
   );
 }
 
+
 /* =========================================================
-   BECOME A GUIDE
+   PROFILE TYPE BADGE
 ========================================================= */
 
-function BecomeGuideCard({
-  onBecome,
-  isPending,
+function ProfileTypeBadge({
+  type,
 }: {
-  onBecome: (values: {
-    headline: string;
-    bio: string;
-    field: string;
-    affiliations: string[];
-  }) => void;
-  isPending: boolean;
+  type: ProfileType;
 }) {
-  const [showForm, setShowForm] = useState(false);
-
-  const [headline, setHeadline] = useState("");
-  const [bio, setBio] = useState("");
-  const [field, setField] = useState("");
-  const [affiliations, setAffiliations] = useState("");
-
-  const [error, setError] = useState<string | null>(null);
-
-  const handleSubmit = () => {
-    if (!headline.trim()) {
-      setError("Headline is required");
-      return;
-    }
-    if (!field.trim()) {
-      setError("Field is required");
-      return;
-    }
-    if (!bio.trim()) {
-      setError("Bio is required");
-      return;
-    }
-
-    setError(null);
-
-    onBecome({
-      headline: headline.trim(),
-      bio: bio.trim(),
-      field: field.trim(),
-      affiliations: affiliations
-        .split(",")
-        .map((x) => x.trim())
-        .filter(Boolean),
-    });
+  const data = {
+    personal: {
+      label: "Personal",
+      icon: UserRound,
+    },
+    guide: {
+      label: "Guide",
+      icon: Sparkles,
+    },
+    organization: {
+      label: "Organization",
+      icon: Building2,
+    },
   };
 
-  if (!showForm) {
-    return (
-      <div className="rounded-2xl border border-line bg-panel p-6 text-center">
-        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-gold/15 text-gold">
-          <UserRoundPlus size={25} />
-        </div>
+  const item = data[type];
+  const Icon = item.icon;
 
-        <h2 className="serif text-xl font-semibold">Become a Guide</h2>
+  return (
+    <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-panel-2 px-3 py-1 text-[10px] font-medium text-ink-dim">
+      <Icon size={12} />
+      {item.label}
+    </div>
+  );
+}
 
-        <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-ink-dim">
-          Share your experience, knowledge, and career journey with people
-          who are looking for guidance.
+
+/* =========================================================
+   PROFILE TYPE SELECTOR
+========================================================= */
+
+function ProfileTypeSection({
+  currentType,
+  onChange,
+  loading,
+}: {
+  currentType: ProfileType;
+  onChange: (type: ProfileType) => void;
+  loading: boolean;
+}) {
+  return (
+    <section className="mb-6 rounded-2xl border border-line bg-panel p-5">
+
+      <div className="mb-4">
+        <h2 className="text-sm font-semibold">
+          How do you use Unfold?
+        </h2>
+
+        <p className="mt-1 text-[11px] leading-relaxed text-ink-faint">
+          Your account stays the same. You can use Unfold as a person,
+          guide, or organization.
         </p>
-
-        <button
-          onClick={() => setShowForm(true)}
-          className="mt-5 rounded-lg bg-gold px-5 py-2.5 text-sm font-semibold text-white"
-        >
-          Become a Guide
-        </button>
       </div>
+
+      <div className="grid grid-cols-3 gap-2">
+
+        <ProfileTypeButton
+          active={currentType === "personal"}
+          icon={UserRound}
+          title="Personal"
+          description="Discover"
+          onClick={() => onChange("personal")}
+          disabled={loading}
+        />
+
+        <ProfileTypeButton
+          active={currentType === "guide"}
+          icon={Sparkles}
+          title="Guide"
+          description="Share expertise"
+          onClick={() => onChange("guide")}
+          disabled={loading}
+        />
+
+        <ProfileTypeButton
+          active={currentType === "organization"}
+          icon={Building2}
+          title="Organization"
+          description="Represent a group"
+          onClick={() => onChange("organization")}
+          disabled={loading}
+        />
+
+      </div>
+
+    </section>
+  );
+}
+
+
+function ProfileTypeButton({
+  active,
+  icon: Icon,
+  title,
+  description,
+  onClick,
+  disabled,
+}: {
+  active: boolean;
+  icon: any;
+  title: string;
+  description: string;
+  onClick: () => void;
+  disabled: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`rounded-xl border p-3 text-center transition ${
+        active
+          ? "border-gold bg-gold/10 text-gold"
+          : "border-line text-ink-dim hover:bg-panel-2"
+      } disabled:opacity-50`}
+    >
+      <Icon size={18} className="mx-auto mb-2" />
+
+      <p className="text-xs font-semibold">
+        {title}
+      </p>
+
+      <p className="mt-1 text-[9px] text-ink-faint">
+        {description}
+      </p>
+    </button>
+  );
+}
+
+
+/* =========================================================
+   PERSONAL PROFILE
+========================================================= */
+
+function PersonalProfile({
+  saved,
+  bookings,
+}: {
+  saved: any[];
+  bookings: any[];
+}) {
+  const [tab, setTab] = useState<"saved" | "bookings">("saved");
+
+  return (
+    <div>
+
+      <ProfileTabs
+        tab={tab}
+        onChange={setTab}
+        tabs={[
+          {
+            key: "saved",
+            label: "Saved",
+            icon: Bookmark,
+          },
+          {
+            key: "bookings",
+            label: "Bookings",
+            icon: CalendarDays,
+          },
+        ]}
+      />
+
+      {tab === "saved" && (
+        <SavedTab saved={saved} />
+      )}
+
+      {tab === "bookings" && (
+        <BookingsTab bookings={bookings} />
+      )}
+
+    </div>
+  );
+}
+
+
+/* =========================================================
+   GUIDE PROFILE
+========================================================= */
+
+function GuideProfile({
+  guide,
+  refetchGuide,
+  bookings,
+}: {
+  guide: any;
+  refetchGuide: () => void;
+  bookings: any[];
+}) {
+  if (!guide) {
+    return (
+      <BecomeGuideCard
+        onCreated={refetchGuide}
+      />
     );
   }
 
   return (
-    <div className="rounded-2xl border border-line bg-panel p-5">
-      <button
-        onClick={() => setShowForm(false)}
-        className="mb-5 inline-flex items-center gap-1.5 text-xs text-ink-dim hover:text-ink"
-      >
-        <ArrowLeft size={13} />
-        Back
-      </button>
-
-      <h2 className="serif text-xl font-medium">Set up your Guide profile</h2>
-
-      <p className="mt-1 text-sm text-ink-dim">
-        This information will be visible to people who discover your Guide
-        profile.
-      </p>
-
-      <div className="mt-5 space-y-3">
-        <div>
-          <label className="mb-1 block text-[11px] uppercase text-ink-faint">
-            Headline
-          </label>
-          <input
-            value={headline}
-            onChange={(e) => setHeadline(e.target.value)}
-            maxLength={120}
-            placeholder="Frontend Developer helping people enter tech"
-            className="w-full rounded-lg border border-line bg-bg px-3 py-2.5 text-sm outline-none focus:border-gold"
-          />
-        </div>
-
-        <div>
-          <label className="mb-1 block text-[11px] uppercase text-ink-faint">
-            Field
-          </label>
-          <input
-            value={field}
-            onChange={(e) => setField(e.target.value)}
-            maxLength={60}
-            placeholder="Technology, Design, Law, Sports..."
-            className="w-full rounded-lg border border-line bg-bg px-3 py-2.5 text-sm outline-none focus:border-gold"
-          />
-        </div>
-
-        <div>
-          <label className="mb-1 block text-[11px] uppercase text-ink-faint">
-            About your experience
-          </label>
-          <textarea
-            value={bio}
-            onChange={(e) => setBio(e.target.value)}
-            rows={4}
-            maxLength={800}
-            placeholder="Tell people what you've done and how you can help."
-            className="w-full resize-none rounded-lg border border-line bg-bg px-3 py-2.5 text-sm outline-none focus:border-gold"
-          />
-        </div>
-
-        <div>
-          <label className="mb-1 block text-[11px] uppercase text-ink-faint">
-            Affiliations
-          </label>
-          <input
-            value={affiliations}
-            onChange={(e) => setAffiliations(e.target.value)}
-            placeholder="Companies, universities, communities..."
-            className="w-full rounded-lg border border-line bg-bg px-3 py-2.5 text-sm outline-none focus:border-gold"
-          />
-          <p className="mt-1 text-[10px] text-ink-faint">
-            Separate multiple affiliations with commas.
-          </p>
-        </div>
-      </div>
-
-      {error && <p className="mt-3 text-xs text-danger">{error}</p>}
-
-      <button
-        onClick={handleSubmit}
-        disabled={isPending}
-        className="mt-5 w-full rounded-lg bg-gold py-3 text-sm font-semibold text-white disabled:opacity-50"
-      >
-        {isPending ? "Creating your Guide profile..." : "Become a Guide"}
-      </button>
-    </div>
-  );
-}
-
-/* =========================================================
-   GUIDE DASHBOARD (existing guide)
-========================================================= */
-
-function GuideDashboard({
-  guide,
-  refetch,
-}: {
-  guide: NonNullable<GuideRow>;
-  refetch: () => void;
-}) {
-  const { user } = useSession();
-  const qc = useQueryClient();
-  const [confirmingRemove, setConfirmingRemove] = useState(false);
-
-  const removeGuide = useMutation({
-    mutationFn: async () => {
-      const { error } = await supabase
-        .from("guides")
-        .delete()
-        .eq("id", guide.id);
-
-      if (error) throw error;
-    },
-
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ["my-guide", user?.id] });
-      await qc.invalidateQueries({ queryKey: ["my-roles", user?.id] });
-      await qc.invalidateQueries({ queryKey: ["guides-list"] });
-      await refetch();
-
-      toast.success("Guide status removed");
-      setConfirmingRemove(false);
-    },
-
-    onError: (e) => {
-      toast.error(
-        e instanceof Error ? e.message : "Could not remove Guide status"
-      );
-    },
-  });
-
-  return (
     <div className="space-y-4">
-      {/* GUIDE MODE */}
+
       <div className="rounded-2xl border border-gold/40 bg-gold/10 p-5">
-        <div className="flex items-start gap-3">
+
+        <div className="flex gap-3">
+
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gold text-white">
             <CheckCircle2 size={20} />
           </div>
 
-          <div className="flex-1">
-            <h2 className="text-sm font-semibold text-gold">Guide Mode</h2>
+          <div>
+            <h2 className="text-sm font-semibold text-gold">
+              Guide profile active
+            </h2>
 
-            <p className="mt-1 text-xs text-ink-dim">
-              Your Guide profile is active. People can now discover you
-              and book sessions with you.
+            <p className="mt-1 text-xs leading-relaxed text-ink-dim">
+              People can discover your experience and book sessions
+              with you.
             </p>
           </div>
+
         </div>
 
         <div className="mt-4 flex gap-2">
+
           <Link
             to="/guides/$id"
             params={{ id: guide.id }}
@@ -559,65 +647,168 @@ function GuideDashboard({
           >
             Create post
           </Link>
+
         </div>
+
       </div>
 
-      {/* GUIDE PROFILE */}
-      <GuideProfileCard guide={guide} refetch={refetch} />
+      <GuideProfileEditor
+        guide={guide}
+        refetch={refetchGuide}
+      />
 
-      {/* SESSIONS */}
-      <GuideSessionsSection guideId={guide.id} />
+      <GuideSessionsSection
+        guideId={guide.id}
+      />
 
-      {/* REMOVE GUIDE STATUS */}
-      <div className="rounded-xl border border-line bg-panel p-5">
-        <h3 className="text-sm font-semibold">Danger zone</h3>
-        <p className="mt-1 text-[11px] text-ink-faint">
-          Remove your Guide profile. This deletes your headline, bio,
-          field, affiliations, and session types. This can't be undone.
-        </p>
+      <BookingsTab bookings={bookings} />
 
-        {!confirmingRemove ? (
-          <button
-            onClick={() => setConfirmingRemove(true)}
-            className="mt-3 rounded-lg border border-danger/40 px-4 py-2 text-xs font-medium text-danger hover:bg-danger/10"
-          >
-            Remove Guide status
-          </button>
-        ) : (
-          <div className="mt-3 flex items-center gap-2">
-            <button
-              onClick={() => removeGuide.mutate()}
-              disabled={removeGuide.isPending}
-              className="rounded-lg bg-danger px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"
-            >
-              {removeGuide.isPending ? "Removing..." : "Yes, remove it"}
-            </button>
-
-            <button
-              onClick={() => setConfirmingRemove(false)}
-              className="rounded-lg border border-line px-4 py-2 text-xs text-ink-dim"
-            >
-              Cancel
-            </button>
-          </div>
-        )}
-      </div>
     </div>
   );
 }
 
-function GuideProfileCard({
+
+/* =========================================================
+   BECOME GUIDE
+========================================================= */
+
+function BecomeGuideCard({
+  onCreated,
+}: {
+  onCreated: () => void;
+}) {
+  const { user } = useSession();
+
+  const [headline, setHeadline] = useState("");
+  const [field, setField] = useState("");
+  const [bio, setBio] = useState("");
+  const [affiliations, setAffiliations] = useState("");
+
+  const createGuide = useMutation({
+    mutationFn: async () => {
+      if (!user) throw new Error("Sign in required");
+
+      if (!headline.trim()) {
+        throw new Error("Headline is required");
+      }
+
+      if (!field.trim()) {
+        throw new Error("Field is required");
+      }
+
+      if (!bio.trim()) {
+        throw new Error("Bio is required");
+      }
+
+      const { error } = await supabase.rpc("become_a_guide", {
+        p_headline: headline.trim(),
+        p_bio: bio.trim(),
+        p_field: field.trim(),
+        p_affiliations: affiliations
+          .split(",")
+          .map((x) => x.trim())
+          .filter(Boolean),
+      });
+
+      if (error) throw error;
+    },
+
+    onSuccess: () => {
+      toast.success("Guide profile created");
+      onCreated();
+    },
+
+    onError: (error) => {
+      toast.error(
+        error instanceof Error ? error.message : "Could not create guide"
+      );
+    },
+  });
+
+  return (
+    <div className="rounded-2xl border border-line bg-panel p-6">
+
+      <div className="mb-5 text-center">
+
+        <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-gold/10 text-gold">
+          <Sparkles size={22} />
+        </div>
+
+        <h2 className="serif text-xl font-semibold">
+          Set up your Guide profile
+        </h2>
+
+        <p className="mt-2 text-sm text-ink-dim">
+          Your personal account remains the same. This simply adds
+          Guide capabilities to your profile.
+        </p>
+
+      </div>
+
+      <div className="space-y-3">
+
+        <input
+          value={headline}
+          onChange={(e) => setHeadline(e.target.value)}
+          placeholder="Headline"
+          className="w-full rounded-lg border border-line bg-bg px-3 py-2.5 text-sm outline-none focus:border-gold"
+        />
+
+        <input
+          value={field}
+          onChange={(e) => setField(e.target.value)}
+          placeholder="Field — Technology, Design, Law, Sports..."
+          className="w-full rounded-lg border border-line bg-bg px-3 py-2.5 text-sm outline-none focus:border-gold"
+        />
+
+        <textarea
+          value={bio}
+          onChange={(e) => setBio(e.target.value)}
+          rows={4}
+          placeholder="Tell people what you know and how you can help."
+          className="w-full resize-none rounded-lg border border-line bg-bg px-3 py-2.5 text-sm outline-none focus:border-gold"
+        />
+
+        <input
+          value={affiliations}
+          onChange={(e) => setAffiliations(e.target.value)}
+          placeholder="Companies, universities, communities..."
+          className="w-full rounded-lg border border-line bg-bg px-3 py-2.5 text-sm outline-none focus:border-gold"
+        />
+
+      </div>
+
+      <button
+        onClick={() => createGuide.mutate()}
+        disabled={createGuide.isPending}
+        className="mt-4 w-full rounded-lg bg-gold py-3 text-sm font-semibold text-white disabled:opacity-50"
+      >
+        {createGuide.isPending
+          ? "Creating..."
+          : "Activate Guide profile"}
+      </button>
+
+    </div>
+  );
+}
+
+
+/* =========================================================
+   GUIDE EDITOR
+========================================================= */
+
+function GuideProfileEditor({
   guide,
   refetch,
 }: {
-  guide: NonNullable<GuideRow>;
+  guide: any;
   refetch: () => void;
 }) {
   const [editing, setEditing] = useState(false);
 
   const [headline, setHeadline] = useState(guide.headline ?? "");
-  const [bio, setBio] = useState(guide.bio ?? "");
   const [field, setField] = useState(guide.field ?? "");
+  const [bio, setBio] = useState(guide.bio ?? "");
   const [affiliations, setAffiliations] = useState(
     (guide.affiliations ?? []).join(", ")
   );
@@ -628,8 +819,8 @@ function GuideProfileCard({
         .from("guides")
         .update({
           headline: headline.trim(),
-          bio: bio.trim(),
           field: field.trim(),
+          bio: bio.trim(),
           affiliations: affiliations
             .split(",")
             .map((x) => x.trim())
@@ -646,58 +837,69 @@ function GuideProfileCard({
       refetch();
     },
 
-    onError: (e) => {
-      toast.error(e instanceof Error ? e.message : "Could not update profile");
+    onError: (error) => {
+      toast.error(
+        error instanceof Error ? error.message : "Could not update"
+      );
     },
   });
 
   return (
     <div className="rounded-2xl border border-line bg-panel p-5">
+
       <div className="mb-4 flex items-center justify-between">
+
         <div>
-          <h2 className="text-sm font-semibold">Guide profile</h2>
+          <h2 className="text-sm font-semibold">
+            Guide information
+          </h2>
+
           <p className="mt-1 text-[11px] text-ink-faint">
-            This is what people see when they discover you.
+            This appears on your public Guide profile.
           </p>
         </div>
 
         <button
-          onClick={() => setEditing((v) => !v)}
-          className="rounded-lg border border-line px-3 py-1.5 text-xs font-medium hover:bg-panel-2"
+          onClick={() => setEditing((x) => !x)}
+          className="rounded-lg border border-line px-3 py-1.5 text-xs"
         >
           {editing ? "Cancel" : "Edit"}
         </button>
+
       </div>
 
       {!editing ? (
         <div>
+
           <h3 className="serif text-lg font-semibold">
-            {guide.headline || "Add your headline"}
+            {guide.headline}
           </h3>
 
           <p className="mt-1 text-xs text-ink-faint">
-            {guide.field || "Add your field"}
+            {guide.field}
           </p>
 
           <p className="mt-4 text-sm leading-relaxed text-ink-dim">
-            {guide.bio || "Add a short bio about yourself."}
+            {guide.bio}
           </p>
 
-          {!!guide.affiliations?.length && (
+          {guide.affiliations?.length > 0 && (
             <div className="mt-4 flex flex-wrap gap-1.5">
-              {guide.affiliations.map((item) => (
+              {guide.affiliations.map((x: string) => (
                 <span
-                  key={item}
+                  key={x}
                   className="rounded-full bg-panel-2 px-2.5 py-1 text-[10px] text-ink-dim"
                 >
-                  {item}
+                  {x}
                 </span>
               ))}
             </div>
           )}
+
         </div>
       ) : (
         <div className="space-y-3">
+
           <input
             value={headline}
             onChange={(e) => setHeadline(e.target.value)}
@@ -716,32 +918,328 @@ function GuideProfileCard({
             value={bio}
             onChange={(e) => setBio(e.target.value)}
             rows={4}
-            placeholder="Tell people about your work..."
+            placeholder="Bio"
             className="w-full resize-none rounded-lg border border-line bg-bg px-3 py-2 text-sm outline-none"
           />
 
           <input
             value={affiliations}
             onChange={(e) => setAffiliations(e.target.value)}
-            placeholder="Affiliations, comma separated"
+            placeholder="Affiliations"
             className="w-full rounded-lg border border-line bg-bg px-3 py-2 text-sm outline-none"
           />
 
           <button
             onClick={() => update.mutate()}
             disabled={update.isPending}
-            className="rounded-lg bg-gold px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"
+            className="rounded-lg bg-gold px-4 py-2 text-xs font-semibold text-white"
           >
-            {update.isPending ? "Saving..." : "Save changes"}
+            {update.isPending ? "Saving..." : "Save"}
           </button>
+
         </div>
       )}
+
     </div>
   );
 }
 
-function GuideSessionsSection({ guideId }: { guideId: string }) {
-  const { data: sessionTypes, refetch } = useQuery({
+
+/* =========================================================
+   ORGANIZATION
+========================================================= */
+
+function OrganizationProfile() {
+  return (
+    <div className="space-y-4">
+
+      <div className="rounded-2xl border border-line bg-panel p-6">
+
+        <div className="flex items-start gap-3">
+
+          <div className="flex h-11 w-11 items-center justify-center rounded-full bg-sage/15 text-sage">
+            <Building2 size={21} />
+          </div>
+
+          <div>
+            <h2 className="text-sm font-semibold">
+              Organization profile
+            </h2>
+
+            <p className="mt-1 text-xs leading-relaxed text-ink-dim">
+              Use your profile to represent a company, university,
+              nonprofit, community, government body, or other
+              organization.
+            </p>
+          </div>
+
+        </div>
+
+        <div className="mt-5 space-y-3">
+
+          <input
+            placeholder="Organization name"
+            className="w-full rounded-lg border border-line bg-bg px-3 py-2.5 text-sm outline-none focus:border-gold"
+          />
+
+          <input
+            placeholder="Organization type"
+            className="w-full rounded-lg border border-line bg-bg px-3 py-2.5 text-sm outline-none focus:border-gold"
+          />
+
+          <textarea
+            rows={4}
+            placeholder="About the organization"
+            className="w-full resize-none rounded-lg border border-line bg-bg px-3 py-2.5 text-sm outline-none focus:border-gold"
+          />
+
+          <input
+            placeholder="Website"
+            className="w-full rounded-lg border border-line bg-bg px-3 py-2.5 text-sm outline-none focus:border-gold"
+          />
+
+          <button className="w-full rounded-lg bg-gold py-2.5 text-sm font-semibold text-white">
+            Save organization
+          </button>
+
+        </div>
+
+      </div>
+
+
+      <div className="rounded-2xl border border-line bg-panel p-5">
+
+        <div className="flex items-center gap-3">
+
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gold/10 text-gold">
+            <Plus size={17} />
+          </div>
+
+          <div>
+            <h3 className="text-sm font-semibold">
+              Publish opportunities
+            </h3>
+
+            <p className="mt-1 text-[11px] text-ink-faint">
+              Share jobs, programs, scholarships, events and
+              other opportunities.
+            </p>
+          </div>
+
+        </div>
+
+        <Link
+          to="/opportunities"
+          className="mt-4 block rounded-lg border border-line px-4 py-2.5 text-center text-xs font-medium hover:bg-panel-2"
+        >
+          View opportunities
+        </Link>
+
+      </div>
+
+    </div>
+  );
+}
+
+
+/* =========================================================
+   PROFILE TABS
+========================================================= */
+
+function ProfileTabs({
+  tabs,
+  tab,
+  onChange,
+}: {
+  tabs: Array<{
+    key: string;
+    label: string;
+    icon: any;
+  }>;
+  tab: string;
+  onChange: (key: any) => void;
+}) {
+  return (
+    <div className="mb-1 flex border-t border-line">
+
+      {tabs.map(({ key, label, icon: Icon }) => (
+        <button
+          key={key}
+          onClick={() => onChange(key)}
+          className={`flex flex-1 items-center justify-center gap-1.5 border-t-2 py-3 text-[11px] font-medium uppercase tracking-wide ${
+            tab === key
+              ? "border-gold text-gold"
+              : "border-transparent text-ink-faint"
+          }`}
+        >
+          <Icon size={15} />
+          {label}
+        </button>
+      ))}
+
+    </div>
+  );
+}
+
+
+/* =========================================================
+   SAVED
+========================================================= */
+
+function SavedTab({ saved }: { saved: any[] }) {
+  if (!saved.length) {
+    return (
+      <div className="mt-4 rounded-xl border border-line bg-panel p-8 text-center">
+
+        <Bookmark
+          className="mx-auto mb-3 text-ink-faint"
+          size={22}
+        />
+
+        <p className="serif text-lg">
+          Nothing saved yet
+        </p>
+
+        <p className="mt-2 text-sm text-ink-dim">
+          Save opportunities you want to come back to.
+        </p>
+
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-1 space-y-2">
+
+      {saved.map((item) => {
+        const opportunity = item.opportunity;
+
+        if (!opportunity) return null;
+
+        return (
+          <Link
+            key={opportunity.id}
+            to="/opportunities/$id"
+            params={{ id: opportunity.id }}
+            className="block rounded-xl border border-line bg-panel p-4 hover:bg-panel-2"
+          >
+
+            <p className="text-sm font-semibold">
+              {opportunity.title}
+            </p>
+
+            <p className="mt-1 text-[11px] text-ink-faint">
+              {opportunity.organization ?? "Opportunity"}
+            </p>
+
+          </Link>
+        );
+      })}
+
+    </div>
+  );
+}
+
+
+/* =========================================================
+   BOOKINGS
+========================================================= */
+
+function BookingsTab({
+  bookings,
+}: {
+  bookings: any[];
+}) {
+  if (!bookings.length) {
+    return (
+      <div className="mt-4 rounded-xl border border-line bg-panel p-8 text-center">
+
+        <CalendarDays
+          className="mx-auto mb-3 text-ink-faint"
+          size={22}
+        />
+
+        <p className="serif text-lg">
+          No bookings yet
+        </p>
+
+        <p className="mt-2 text-sm text-ink-dim">
+          Sessions you book will appear here.
+        </p>
+
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-4 space-y-3">
+
+      {bookings.map((booking) => {
+
+        const session = booking.session_type;
+
+        const guide = booking.guide;
+
+        return (
+          <div
+            key={booking.id}
+            className="rounded-xl border border-line bg-panel p-4"
+          >
+
+            <div className="flex items-center justify-between">
+
+              <p className="text-sm font-semibold">
+                {session?.name ?? "Session"}
+              </p>
+
+              <span className="rounded-md bg-panel-2 px-2 py-1 text-[9px] uppercase">
+                {booking.status}
+              </span>
+
+            </div>
+
+            <p className="mt-1 flex items-center gap-1.5 text-[11px] text-ink-faint">
+
+              <Clock size={11} />
+
+              {formatDistanceToNow(
+                new Date(booking.scheduled_at),
+                { addSuffix: true }
+              )}
+
+              · {session?.duration_minutes ?? 0} min
+
+            </p>
+
+            {guide && (
+              <Link
+                to="/guides/$id"
+                params={{ id: guide.id }}
+                className="mt-2 inline-block text-xs text-gold"
+              >
+                View guide →
+              </Link>
+            )}
+
+          </div>
+        );
+      })}
+
+    </div>
+  );
+}
+
+
+/* =========================================================
+   GUIDE SESSIONS
+========================================================= */
+
+function GuideSessionsSection({
+  guideId,
+}: {
+  guideId: string;
+}) {
+  const { data, refetch } = useQuery({
     queryKey: ["my-session-types", guideId],
 
     queryFn: async () => {
@@ -758,157 +1256,29 @@ function GuideSessionsSection({ guideId }: { guideId: string }) {
   });
 
   return (
-    <SessionTypeEditor
+    <SessionEditor
       guideId={guideId}
-      sessionTypes={sessionTypes ?? []}
+      sessions={data ?? []}
       refetch={refetch}
     />
   );
 }
 
-/* =========================================================
-   SAVED
-========================================================= */
-
-function SavedTab({ saved }: { saved: any[] }) {
-  if (!saved.length) {
-    return (
-      <div className="mt-4 rounded-xl border border-line bg-panel p-8 text-center">
-        <Bookmark className="mx-auto mb-3 text-ink-faint" size={22} />
-        <p className="serif text-lg">Nothing saved yet</p>
-        <p className="mt-2 text-sm text-ink-dim">
-          Save opportunities you want to come back to.
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="mt-0.5 grid grid-cols-3 gap-0.5">
-      {saved.map((s) => {
-        const o = s.opportunity as {
-          id: string;
-          title: string;
-          organization: string;
-          summary: string;
-        } | null;
-
-        if (!o) return null;
-
-        return (
-          <Link
-            key={o.id}
-            to="/opportunities/$id"
-            params={{ id: o.id }}
-            className="group relative aspect-square overflow-hidden bg-panel-2"
-          >
-            <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-gold/25 to-panel-2 p-3">
-              <span className="serif line-clamp-4 text-center text-xs font-medium leading-snug">
-                {o.title}
-              </span>
-            </div>
-
-            <div className="absolute right-1.5 top-1.5 rounded-full bg-black/40 p-1">
-              <Bookmark size={11} className="fill-white text-white" />
-            </div>
-
-            <div className="absolute inset-0 flex flex-col justify-end bg-black/0 p-2 opacity-0 transition group-hover:bg-black/60 group-hover:opacity-100">
-              <p className="text-[10px] font-semibold text-white">
-                {o.organization}
-              </p>
-
-              <p className="line-clamp-2 text-[9.5px] text-white/80">
-                {o.summary}
-              </p>
-            </div>
-          </Link>
-        );
-      })}
-    </div>
-  );
-}
-
-/* =========================================================
-   BOOKINGS
-========================================================= */
-
-function BookingsTab({ bookings }: { bookings: any[] }) {
-  if (!bookings.length) {
-    return (
-      <div className="mt-4 rounded-xl border border-line bg-panel p-8 text-center">
-        <CalendarDays className="mx-auto mb-3 text-ink-faint" size={22} />
-        <p className="serif text-lg">No bookings yet</p>
-        <p className="mt-2 text-sm text-ink-dim">
-          Sessions you book with guides will appear here.
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="mt-4 space-y-3">
-      {bookings.map((b) => {
-        const st = b.session_type as {
-          name: string;
-          duration_minutes: number;
-        } | null;
-
-        const gd = b.guide as { id: string; headline: string } | null;
-
-        return (
-          <div key={b.id} className="rounded-xl border border-line bg-panel p-4">
-            <div className="mb-1 flex items-center justify-between">
-              <p className="text-sm font-semibold">{st?.name ?? "Session"}</p>
-
-              <span className="mono rounded-md bg-panel-2 px-2 py-0.5 text-[9.5px] uppercase text-ink-dim">
-                {b.status}
-              </span>
-            </div>
-
-            <p className="flex items-center gap-1.5 text-[11.5px] text-ink-faint">
-              <Clock size={11} />
-              {formatDistanceToNow(new Date(b.scheduled_at), { addSuffix: true })}
-              · {st?.duration_minutes ?? 0}min
-            </p>
-
-            {gd && (
-              <Link
-                to="/guides/$id"
-                params={{ id: gd.id }}
-                className="mt-2 inline-block text-xs text-gold"
-              >
-                View guide →
-              </Link>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
 
 /* =========================================================
    SESSION EDITOR
 ========================================================= */
 
-function SessionTypeEditor({
+function SessionEditor({
   guideId,
-  sessionTypes,
+  sessions,
   refetch,
 }: {
   guideId: string;
-
-  sessionTypes: Array<{
-    id: string;
-    name: string;
-    duration_minutes: number;
-    price_cents: number;
-    description: string | null;
-  }>;
-
+  sessions: any[];
   refetch: () => void;
 }) {
-  const [showAdd, setShowAdd] = useState(false);
+  const [adding, setAdding] = useState(false);
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -917,16 +1287,20 @@ function SessionTypeEditor({
 
   const add = useMutation({
     mutationFn: async () => {
-      if (!name.trim()) throw new Error("Session name is required");
-      if (duration < 5) throw new Error("Duration must be at least 5 minutes");
 
-      const { error } = await supabase.from("guide_session_types").insert({
-        guide_id: guideId,
-        name: name.trim(),
-        description: description.trim() || null,
-        duration_minutes: duration,
-        price_cents: Math.max(0, Math.round(price * 100)),
-      });
+      if (!name.trim()) {
+        throw new Error("Session name is required");
+      }
+
+      const { error } = await supabase
+        .from("guide_session_types")
+        .insert({
+          guide_id: guideId,
+          name: name.trim(),
+          description: description.trim() || null,
+          duration_minutes: duration,
+          price_cents: Math.round(price * 100),
+        });
 
       if (error) throw error;
     },
@@ -936,19 +1310,23 @@ function SessionTypeEditor({
       setDescription("");
       setDuration(30);
       setPrice(0);
-      setShowAdd(false);
+      setAdding(false);
 
       refetch();
+
       toast.success("Session added");
     },
 
-    onError: (e) => {
-      toast.error(e instanceof Error ? e.message : "Failed");
+    onError: (error) => {
+      toast.error(
+        error instanceof Error ? error.message : "Could not add session"
+      );
     },
   });
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
+
       const { error } = await supabase
         .from("guide_session_types")
         .delete()
@@ -961,146 +1339,112 @@ function SessionTypeEditor({
       refetch();
       toast.success("Session removed");
     },
-
-    onError: (e) => {
-      toast.error(e instanceof Error ? e.message : "Failed");
-    },
   });
 
   return (
-    <div className="rounded-xl border border-line bg-panel p-5">
+    <div className="rounded-2xl border border-line bg-panel p-5">
+
       <div className="mb-4 flex items-center justify-between">
+
         <div>
-          <h3 className="text-sm font-semibold">Sessions</h3>
+          <h3 className="text-sm font-semibold">
+            Sessions
+          </h3>
+
           <p className="mt-1 text-[11px] text-ink-faint">
             Let people book time with you.
           </p>
         </div>
 
         <button
-          onClick={() => setShowAdd((v) => !v)}
+          onClick={() => setAdding((x) => !x)}
           className="flex items-center gap-1.5 rounded-lg bg-gold px-3 py-2 text-xs font-semibold text-white"
         >
           <Plus size={13} />
           Add
         </button>
+
       </div>
 
-      {sessionTypes.length === 0 && !showAdd && (
-        <div className="rounded-lg border border-dashed border-line p-5 text-center">
-          <CalendarDays className="mx-auto mb-2 text-ink-faint" size={20} />
-          <p className="text-sm text-ink-dim">No sessions yet.</p>
-          <p className="mt-1 text-[11px] text-ink-faint">
-            Add your first session so people can book you.
-          </p>
+      {sessions.map((session) => (
+        <div
+          key={session.id}
+          className="mb-2 flex items-center justify-between rounded-lg border border-line bg-bg p-3"
+        >
+
+          <div>
+
+            <p className="text-sm font-medium">
+              {session.name}
+            </p>
+
+            <p className="mt-1 text-[10px] text-ink-faint">
+              {session.duration_minutes} min ·{" "}
+              {session.price_cents === 0
+                ? "Free"
+                : `$${session.price_cents / 100}`}
+            </p>
+
+          </div>
+
+          <button
+            onClick={() => remove.mutate(session.id)}
+            className="rounded-lg p-2 text-ink-faint hover:text-danger"
+          >
+            <Trash2 size={14} />
+          </button>
+
         </div>
-      )}
+      ))}
 
-      {sessionTypes.length > 0 && (
-        <div className="space-y-2">
-          {sessionTypes.map((s) => (
-            <div
-              key={s.id}
-              className="flex items-center justify-between rounded-lg border border-line bg-bg px-3 py-3"
-            >
-              <div>
-                <p className="text-sm font-medium">{s.name}</p>
+      {adding && (
+        <div className="mt-4 space-y-2 rounded-lg border border-line bg-bg p-4">
 
-                <p className="mt-0.5 text-[11px] text-ink-faint">
-                  {s.duration_minutes} min ·{" "}
-                  {s.price_cents === 0
-                    ? "Free"
-                    : `$${(s.price_cents / 100).toFixed(0)}`}
-                </p>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Session name"
+            className="w-full rounded-lg border border-line bg-panel px-3 py-2 text-sm outline-none"
+          />
 
-                {s.description && (
-                  <p className="mt-1 text-[10px] text-ink-faint">
-                    {s.description}
-                  </p>
-                )}
-              </div>
+          <input
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="What will you help with?"
+            className="w-full rounded-lg border border-line bg-panel px-3 py-2 text-sm outline-none"
+          />
 
-              <button
-                onClick={() => remove.mutate(s.id)}
-                disabled={remove.isPending}
-                className="rounded-lg p-2 text-ink-faint hover:bg-danger/10 hover:text-danger"
-              >
-                <Trash2 size={14} />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
+          <div className="grid grid-cols-2 gap-2">
 
-      {showAdd && (
-        <div className="mt-4 rounded-lg border border-line bg-bg p-4">
-          <h4 className="mb-3 text-xs font-semibold">New session</h4>
-
-          <div className="space-y-2">
             <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Intro chat"
-              className="w-full rounded-lg border border-line bg-panel px-3 py-2 text-sm outline-none focus:border-gold"
+              type="number"
+              min={5}
+              value={duration}
+              onChange={(e) => setDuration(Number(e.target.value))}
+              className="rounded-lg border border-line bg-panel px-3 py-2 text-sm"
             />
 
             <input
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="What will you help with?"
-              className="w-full rounded-lg border border-line bg-panel px-3 py-2 text-sm outline-none focus:border-gold"
+              type="number"
+              min={0}
+              value={price}
+              onChange={(e) => setPrice(Number(e.target.value))}
+              className="rounded-lg border border-line bg-panel px-3 py-2 text-sm"
             />
 
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="mb-1 block text-[10px] text-ink-faint">
-                  Minutes
-                </label>
-
-                <input
-                  type="number"
-                  min={5}
-                  value={duration}
-                  onChange={(e) => setDuration(Number(e.target.value))}
-                  className="w-full rounded-lg border border-line bg-panel px-3 py-2 text-sm outline-none focus:border-gold"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-[10px] text-ink-faint">
-                  Price ($)
-                </label>
-
-                <input
-                  type="number"
-                  min={0}
-                  step="1"
-                  value={price}
-                  onChange={(e) => setPrice(Number(e.target.value))}
-                  className="w-full rounded-lg border border-line bg-panel px-3 py-2 text-sm outline-none focus:border-gold"
-                />
-              </div>
-            </div>
           </div>
 
-          <div className="mt-3 flex gap-2">
-            <button
-              onClick={() => add.mutate()}
-              disabled={add.isPending}
-              className="rounded-lg bg-gold px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"
-            >
-              {add.isPending ? "Adding..." : "Add session"}
-            </button>
+          <button
+            onClick={() => add.mutate()}
+            disabled={add.isPending}
+            className="rounded-lg bg-gold px-4 py-2 text-xs font-semibold text-white"
+          >
+            {add.isPending ? "Adding..." : "Add session"}
+          </button>
 
-            <button
-              onClick={() => setShowAdd(false)}
-              className="rounded-lg border border-line px-4 py-2 text-xs text-ink-dim"
-            >
-              Cancel
-            </button>
-          </div>
         </div>
       )}
+
     </div>
   );
 }

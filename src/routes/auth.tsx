@@ -11,10 +11,9 @@ const searchSchema = z.object({
   mode: z.enum(["signin", "signup"]).optional(),
 });
 
-type ProfileType = "explorer" | "guide" | "institution";
-
 export const Route = createFileRoute("/auth")({
-  validateSearch: (s: Record<string, unknown>) => searchSchema.parse(s),
+  validateSearch: (s: Record<string, unknown>) =>
+    searchSchema.parse(s),
 
   head: () => ({
     meta: [
@@ -22,7 +21,7 @@ export const Route = createFileRoute("/auth")({
       {
         name: "description",
         content:
-          "Sign in or create your Unfold account to discover opportunities, find guides, or connect institutions with experts.",
+          "Sign in or create your Unfold account to discover opportunities, people, ideas and communities.",
       },
     ],
   }),
@@ -41,99 +40,49 @@ function AuthPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
-
-  const [profileType, setProfileType] =
-    useState<ProfileType>("explorer");
-
   const [loading, setLoading] = useState(false);
-const continueAfterAuth = async (userId: string) => {
-  // First check if there is an explicit redirect
-  // requested by another part of the app.
-  if (search.redirect) {
-    navigate({ to: search.redirect });
-    return;
-  }
 
-  // Get the user's profile type
-  const { data: profile, error } = await supabase
-    .from("profiles")
-    .select("profile_type")
-    .eq("id", userId)
-    .maybeSingle();
+  /*
+   * ---------------------------------------------
+   * AFTER AUTH
+   * ---------------------------------------------
+   *
+   * Everyone enters the same application.
+   *
+   * No explorer / guide / institution routing.
+   */
 
-  if (error) {
-    console.error("Failed to load profile type:", error);
-    throw error;
-  }
+  const continueAfterAuth = () => {
+    const redirectTo = search.redirect || "/feed";
 
-  // SIGN UP
-  if (mode === "signup") {
-    // Save the selected type
-    const { error: updateError } = await supabase
-      .from("profiles")
-      .update({
-        profile_type: profileType,
-      })
-      .eq("id", userId);
+    navigate({
+      to: redirectTo,
+    });
+  };
 
-    if (updateError) throw updateError;
+  /*
+   * ---------------------------------------------
+   * CHECK EXISTING SESSION
+   * ---------------------------------------------
+   */
 
-    if (profileType === "explorer") {
-      navigate({
-        to: "/explore",
-        search: { redirect: "/explore" },
-      });
-      return;
-    }
+  useEffect(() => {
+    const checkUser = async () => {
+      const { data } = await supabase.auth.getUser();
 
-    if (profileType === "guide") {
-      navigate({
-        to: "/profile/guide",
-        search: { redirect: "/feed" },
-      });
-      return;
-    }
+      if (data.user) {
+        continueAfterAuth();
+      }
+    };
 
-    if (profileType === "institution") {
-      navigate({
-        to: "/institution",
-        search: { redirect: "/institution" },
-      });
-      return;
-    }
+    checkUser();
+  }, [search.redirect]);
 
-    return;
-  }
-
-  // SIGN IN
-  const type = profile?.profile_type;
-
-  if (type === "explorer") {
-    navigate({ to: "/explore" });
-    return;
-  }
-
-  if (type === "guide") {
-    navigate({ to: "/feed" });
-    return;
-  }
-
-  if (type === "institution") {
-    navigate({ to: "/institution" });
-    return;
-  }
-
-  // Fallback for users whose profile_type is missing
-  navigate({ to: "/explore" });
-};
-useEffect(() => {
-  supabase.auth.getUser().then(async ({ data }) => {
-    if (!data.user) return;
-
-    await continueAfterAuth(data.user.id);
-  });
-}, [navigate]);
-
+  /*
+   * ---------------------------------------------
+   * EMAIL AUTH
+   * ---------------------------------------------
+   */
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -141,16 +90,22 @@ useEffect(() => {
     setLoading(true);
 
     try {
+      /*
+       * SIGN UP
+       */
+
       if (mode === "signup") {
         const parsed = z
           .object({
-            email: z.string().email(),
-            password: z.string().min(6, "At least 6 characters"),
+            email: z.string().email("Enter a valid email"),
+            password: z
+              .string()
+              .min(6, "At least 6 characters"),
             displayName: z
               .string()
               .trim()
               .min(1, "Enter your name")
-              .max(60),
+              .max(60, "Name is too long"),
           })
           .safeParse({
             email,
@@ -163,31 +118,31 @@ useEffect(() => {
           return;
         }
 
-        /*
-         * Create Supabase Auth account
-         */
-        const { data, error } = await supabase.auth.signUp({
-          email,
-          password,
+        const { data, error } =
+          await supabase.auth.signUp({
+            email: parsed.data.email,
+            password: parsed.data.password,
 
-          options: {
-            emailRedirectTo: window.location.origin,
+            options: {
+              emailRedirectTo: window.location.origin,
 
-            data: {
-              display_name: displayName.trim(),
+              data: {
+                display_name:
+                  parsed.data.displayName,
+              },
             },
-          },
-        });
+          });
 
-        if (error) throw error;
+        if (error) {
+          throw error;
+        }
 
         /*
-         * Supabase may require email confirmation.
-         *
-         * If there is no session yet, the profile row
-         * cannot safely be updated from the browser.
+         * Email confirmation may be enabled
+         * in Supabase.
          */
-        if (!data.user) {
+
+        if (!data.session) {
           toast.success(
             "Account created. Check your email to continue."
           );
@@ -195,31 +150,34 @@ useEffect(() => {
           return;
         }
 
-        /*
-         * Save selected profile type
-         */
-        await continueAfterAuth(data.user.id);
-
         toast.success("Welcome to Unfold");
-      } else {
-        /* ------------------------------------------------
-         * SIGN IN
-         * ------------------------------------------------ */
 
-        const { data, error } =
-          await supabase.auth.signInWithPassword({
-            email,
-            password,
-          });
+        continueAfterAuth();
 
-        if (error) throw error;
-
-        if (!data.user) {
-          throw new Error("Unable to sign in");
-        }
-
-        await continueAfterAuth(data.user.id);
+        return;
       }
+
+      /*
+       * SIGN IN
+       */
+
+      const { data, error } =
+        await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+      if (error) {
+        throw error;
+      }
+
+      if (!data.user) {
+        throw new Error("Unable to sign in");
+      }
+
+      toast.success("Welcome back");
+
+      continueAfterAuth();
     } catch (err) {
       toast.error(
         err instanceof Error
@@ -231,32 +189,38 @@ useEffect(() => {
     }
   };
 
-  /* --------------------------------------------------
-   * GOOGLE LOGIN
-   * -------------------------------------------------- */
+  /*
+   * ---------------------------------------------
+   * GOOGLE AUTH
+   * ---------------------------------------------
+   */
 
   const google = async () => {
     setLoading(true);
 
     try {
-      const res = await lovable.auth.signInWithOAuth("google", {
-        redirect_uri: window.location.origin,
-      });
+      const redirectTo =
+        `${window.location.origin}/auth` +
+        (search.redirect
+          ? `?redirect=${encodeURIComponent(search.redirect)}`
+          : "");
 
-      if (res.error) {
-        toast.error("Google sign-in failed");
-        setLoading(false);
-        return;
+      const { error } =
+        await supabase.auth.signInWithOAuth({
+          provider: "google",
+
+          options: {
+            redirectTo,
+          },
+        });
+
+      if (error) {
+        throw error;
       }
 
       /*
-       * OAuth normally redirects the browser.
-       * Profile type selection for Google users will be
-       * handled in the onboarding step later.
+       * Supabase handles the browser redirect.
        */
-      if (!res.redirected) {
-       navigate({ to: "/onboarding" });
-      }
     } catch (err) {
       toast.error(
         err instanceof Error
@@ -268,40 +232,12 @@ useEffect(() => {
     }
   };
 
-  /* --------------------------------------------------
-   * PROFILE TYPE OPTIONS
-   * -------------------------------------------------- */
-
-  const profileOptions: {
-    value: ProfileType;
-    title: string;
-    description: string;
-  }[] = [
-    {
-      value: "explorer",
-      title: "I'm exploring",
-      description:
-        "I want to discover opportunities, fields, people and paths I didn't know existed.",
-    },
-    {
-      value: "guide",
-      title: "I'm a guide / expert",
-      description:
-        "I have experience to share and want to help people or get discovered by institutions.",
-    },
-    {
-      value: "institution",
-      title: "I'm a school / college",
-      description:
-        "I want to discover experts and invite them for seminars, workshops and student programs.",
-    },
-  ];
-
   return (
     <div className="min-h-screen bg-bg">
-      {/* ------------------------------------------------
+
+      {/* -----------------------------------------
           NAV
-      ------------------------------------------------ */}
+      ----------------------------------------- */}
 
       <nav className="border-b border-line px-[5vw] py-4">
         <Link to="/">
@@ -309,11 +245,12 @@ useEffect(() => {
         </Link>
       </nav>
 
-      {/* ------------------------------------------------
+      {/* -----------------------------------------
           MAIN
-      ------------------------------------------------ */}
+      ----------------------------------------- */}
 
-      <div className="mx-auto max-w-md px-6 py-12">
+      <div className="mx-auto max-w-md px-6 py-16">
+
         {/* HEADER */}
 
         <h1 className="serif mb-2 text-3xl font-medium">
@@ -324,20 +261,25 @@ useEffect(() => {
 
         <p className="mb-8 text-sm leading-relaxed text-ink-dim">
           {mode === "signup"
-            ? "Tell us how you want to use Unfold. You can always grow into more than one role later."
+            ? "Create your account and start exploring Unfold."
             : "Sign in to pick up where you left off."}
         </p>
 
-        {/* ------------------------------------------------
+        {/* -----------------------------------------
             GOOGLE
-        ------------------------------------------------ */}
+        ----------------------------------------- */}
 
         <button
+          type="button"
           onClick={google}
           disabled={loading}
           className="mb-4 flex w-full items-center justify-center gap-3 rounded-xl border border-line bg-panel py-3 text-sm font-medium text-ink hover:bg-panel-2 disabled:opacity-50"
         >
-          <svg width="16" height="16" viewBox="0 0 48 48">
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 48 48"
+          >
             <path
               fill="#EA4335"
               d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
@@ -374,11 +316,15 @@ useEffect(() => {
           <span className="h-px flex-1 bg-line" />
         </div>
 
-        {/* ------------------------------------------------
+        {/* -----------------------------------------
             FORM
-        ------------------------------------------------ */}
+        ----------------------------------------- */}
 
-        <form onSubmit={submit} className="space-y-3">
+        <form
+          onSubmit={submit}
+          className="space-y-3"
+        >
+
           {/* NAME */}
 
           {mode === "signup" && (
@@ -401,7 +347,9 @@ useEffect(() => {
             type="email"
             placeholder="you@somewhere.com"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) =>
+              setEmail(e.target.value)
+            }
             required
             className="w-full rounded-xl border border-line bg-panel px-4 py-3 text-sm outline-none focus:border-gold"
           />
@@ -419,76 +367,6 @@ useEffect(() => {
             minLength={6}
             className="w-full rounded-xl border border-line bg-panel px-4 py-3 text-sm outline-none focus:border-gold"
           />
-
-          {/* ------------------------------------------------
-              PROFILE TYPE
-          ------------------------------------------------ */}
-
-          {mode === "signup" && (
-            <div className="pt-4">
-              <div className="mb-3">
-                <p className="text-sm font-medium">
-                  How will you use Unfold?
-                </p>
-
-                <p className="mt-1 text-xs leading-relaxed text-ink-faint">
-                  Choose the option that fits you best.
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                {profileOptions.map((option) => {
-                  const selected =
-                    profileType === option.value;
-
-                  return (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() =>
-                        setProfileType(option.value)
-                      }
-                      className={`w-full rounded-xl border p-4 text-left transition ${
-                        selected
-                          ? "border-gold bg-gold/5"
-                          : "border-line bg-panel hover:border-gold/40"
-                      }`}
-                    >
-                      <div className="flex items-start gap-3">
-                        <div
-                          className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
-                            selected
-                              ? "border-gold"
-                              : "border-ink-faint"
-                          }`}
-                        >
-                          {selected && (
-                            <div className="h-2 w-2 rounded-full bg-gold" />
-                          )}
-                        </div>
-
-                        <div>
-                          <p
-                            className={`text-sm font-medium ${
-                              selected
-                                ? "text-gold"
-                                : "text-ink"
-                            }`}
-                          >
-                            {option.title}
-                          </p>
-
-                          <p className="mt-1 text-xs leading-relaxed text-ink-dim">
-                            {option.description}
-                          </p>
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
 
           {/* SUBMIT */}
 
@@ -511,7 +389,9 @@ useEffect(() => {
           {mode === "signup"
             ? "Have an account?"
             : "New here?"}{" "}
+
           <button
+            type="button"
             onClick={() =>
               setMode(
                 mode === "signup"
