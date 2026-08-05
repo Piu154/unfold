@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { Logo } from "@/components/Logo";
-import { HiddenOpportunityGlobe } from "../components/ui/HiddenOpportunityGlobe";
+// import { HiddenOpportunityGlobe } from "../components/ui/HiddenOpportunityGlobe";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -247,9 +247,9 @@ function Landing() {
       </section>
 
       {/* Globe */}
-      <div className="px-[5vw]">
+      {/* <div className="px-[5vw]">
         <HiddenOpportunityGlobe />
-      </div>
+      </div> */}
 
       {/* Who it's for */}
       <section className="border-t border-line px-[5vw] py-14">
