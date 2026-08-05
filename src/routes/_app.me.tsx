@@ -27,7 +27,7 @@ export const Route = createFileRoute("/_app/me")({
   component: MePage,
 });
 
-type ProfileType = "personal" | "guide" | "organization";
+type ProfileType = "explorer" | "guide";
 
 function initials(name?: string | null) {
   if (!name) return "U";
@@ -51,8 +51,8 @@ function MePage() {
   const [displayName, setDisplayName] = useState("");
   const [bio, setBio] = useState("");
 
-  const profileType: ProfileType =
-    (profile?.profile_type as ProfileType) ?? "personal";
+const profileType: ProfileType =
+  (profile?.profile_type as ProfileType) ?? "explorer";
 
   useEffect(() => {
     setDisplayName(profile?.display_name ?? "");
@@ -402,27 +402,19 @@ function MePage() {
 }
 
 
-/* =========================================================
-   PROFILE TYPE BADGE
-========================================================= */
-
 function ProfileTypeBadge({
   type,
 }: {
   type: ProfileType;
 }) {
   const data = {
-    personal: {
-      label: "Personal",
+    explorer: {
+      label: "Explorer",
       icon: UserRound,
     },
     guide: {
       label: "Guide",
       icon: Sparkles,
-    },
-    organization: {
-      label: "Organization",
-      icon: Building2,
     },
   };
 
@@ -437,11 +429,6 @@ function ProfileTypeBadge({
   );
 }
 
-
-/* =========================================================
-   PROFILE TYPE SELECTOR
-========================================================= */
-
 function ProfileTypeSection({
   currentType,
   onChange,
@@ -453,26 +440,24 @@ function ProfileTypeSection({
 }) {
   return (
     <section className="mb-6 rounded-2xl border border-line bg-panel p-5">
-
       <div className="mb-4">
         <h2 className="text-sm font-semibold">
           How do you use Unfold?
         </h2>
 
         <p className="mt-1 text-[11px] leading-relaxed text-ink-faint">
-          Your account stays the same. You can use Unfold as a person,
-          guide, or organization.
+          Explore opportunities, discover experienced people, or share
+          your knowledge as a Guide.
         </p>
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
-
+      <div className="grid grid-cols-2 gap-2">
         <ProfileTypeButton
-          active={currentType === "personal"}
+          active={currentType === "explorer"}
           icon={UserRound}
-          title="Personal"
-          description="Discover"
-          onClick={() => onChange("personal")}
+          title="Explorer"
+          description="Discover & learn"
+          onClick={() => onChange("explorer")}
           disabled={loading}
         />
 
@@ -484,22 +469,10 @@ function ProfileTypeSection({
           onClick={() => onChange("guide")}
           disabled={loading}
         />
-
-        <ProfileTypeButton
-          active={currentType === "organization"}
-          icon={Building2}
-          title="Organization"
-          description="Represent a group"
-          onClick={() => onChange("organization")}
-          disabled={loading}
-        />
-
       </div>
-
     </section>
   );
 }
-
 
 function ProfileTypeButton({
   active,
